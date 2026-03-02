@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "todo-assistant"
+version = "0.1.0"
+description = "An AI-powered todo list assistant that helps you organize, prioritize, and complete tasks"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.39.0",
+    "rich>=13.0.0",
+    "prompt_toolkit>=3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
+[project.scripts]
+todo = "todo_assistant.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
