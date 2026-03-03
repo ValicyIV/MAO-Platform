@@ -12,6 +12,8 @@ dependencies = [
     "anthropic>=0.39.0",
     "rich>=13.0.0",
     "prompt_toolkit>=3.0.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
 ]
 
 [project.optional-dependencies]
@@ -21,6 +23,7 @@ dev = [
 
 [project.scripts]
 todo = "todo_assistant.cli:main"
+todo-web = "todo_assistant.run_server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Todo Assistant</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header>
+      <h1>AI Todo Assistant</h1>
+      <div class="header-actions">
+        <button onclick="openSummary()" class="btn btn-ai" title="Daily Summary">Summary</button>
+        <button onclick="openChat()" class="btn btn-ai" title="Chat with AI">Chat</button>
+        <button onclick="clearDone()" class="btn btn-ghost" title="Clear completed">Clear Done</button>
+      </div>
+    </header>
+
+    <!-- Filters -->
+    <div class="filters">
+      <input type="text" id="search" placeholder="Search tasks..." oninput="loadTodos()">
+      <select id="filter-status" onchange="loadTodos()">
+        <option value="">All Statuses</option>
+        <option value="todo">Todo</option>
+        <option value="in_progress">In Progress</option>
+        <option value="done">Done</option>
+      </select>
+      <select id="filter-priority" onchange="loadTodos()">
+        <option value="">All Priorities</option>
+        <option value="urgent">Urgent</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+    </div>
+
+    <!-- Add task form -->
+    <form class="add-form" onsubmit="addTodo(event)">
+      <input type="text" id="new-title" placeholder="What needs to be done?" required>
+      <input type="text" id="new-desc" placeholder="Description (optional)">
+      <select id="new-priority">
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+        <option value="high">High</option>
+        <option value="urgent">Urgent</option>
+      </select>
+      <input type="text" id="new-category" placeholder="Category">
+      <button type="submit" class="btn btn-primary">Add Task</button>
+    </form>
+
+    <!-- Task list -->
+    <div id="todo-list" class="todo-list"></div>
+
+    <!-- Modal overlay -->
+    <div id="modal-overlay" class="modal-overlay" onclick="closeModal(event)">
+      <div class="modal" onclick="event.stopPropagation()">
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+        <div id="modal-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

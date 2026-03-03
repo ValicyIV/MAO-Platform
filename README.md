@@ -1,6 +1,6 @@
 # AI Todo Assistant
 
-An AI-powered command-line todo list assistant that helps you organize, prioritize, and complete tasks. Uses Claude as the AI backend to provide intelligent task breakdowns, priority suggestions, and daily planning.
+An AI-powered todo list assistant with both a CLI and a web UI. Uses Claude as the AI backend to provide intelligent task breakdowns, priority suggestions, and daily planning.
 
 ## Features
 
@@ -30,7 +30,15 @@ export ANTHROPIC_API_KEY="your-key-here"
 
 ## Usage
 
-Start the assistant:
+### Web UI
+
+```bash
+todo-web
+```
+
+Open http://localhost:8000 in your browser.
+
+### CLI
 
 ```bash
 todo
