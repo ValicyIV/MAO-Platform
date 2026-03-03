@@ -114,6 +114,17 @@ class AIEngine:
         )
         return self._ask(prompt)
 
+    def rewrite_task(self, todo: Todo) -> str:
+        prompt = (
+            f"Rewrite this vague or unclear task into a clear, specific, actionable one.\n\n"
+            f"  Current title: {todo.title}\n"
+            f"  Current description: {todo.description or '(none)'}\n\n"
+            f"Reply in exactly this format (two lines, no extra text):\n"
+            f"Title: <improved title>\n"
+            f"Description: <one-sentence actionable description>"
+        )
+        return self._ask(prompt)
+
     def chat(self, message: str, todos: list[Todo]) -> str:
         lines = []
         for t in todos:

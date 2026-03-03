@@ -176,6 +176,14 @@ def ai_category(todo_id: str):
     return {"result": ai.suggest_category(todo, existing)}
 
 
+@app.post("/api/ai/rewrite/{todo_id}")
+def ai_rewrite(todo_id: str):
+    todo = store.get(todo_id)
+    if not todo:
+        raise HTTPException(404, "Task not found")
+    return {"result": ai.rewrite_task(todo)}
+
+
 @app.post("/api/ai/summary")
 def ai_summary():
     return {"result": ai.daily_summary(store.todos)}

@@ -213,6 +213,7 @@ function openAI(id) {
       <button class="btn btn-ai" onclick="aiAction('priority','${id}')">Suggest Priority</button>
       <button class="btn btn-ai" onclick="aiAction('nextstep','${id}')">Next Step</button>
       <button class="btn btn-ai" onclick="aiAction('category','${id}')">Suggest Category</button>
+      <button class="btn btn-ai" onclick="aiAction('rewrite','${id}')">Rewrite Task</button>
     </div>
     <div id="ai-result-area"></div>`;
   openModal();
@@ -228,6 +229,8 @@ async function aiAction(action, id) {
       extra = `<div class="btn-row"><button class="btn btn-primary" onclick="applyBreakdown('${id}')">Add as Subtasks</button></div>`;
     } else if (action === "category") {
       extra = `<div class="btn-row"><button class="btn btn-primary" onclick="applyCategory('${id}','${esc(data.result).replace(/'/g, "\\'")}')">Apply Category</button></div>`;
+    } else if (action === "rewrite") {
+      extra = `<div class="btn-row"><button class="btn btn-primary" onclick="applyRewrite('${id}')">Apply Rewrite</button></div>`;
     }
     area.innerHTML = `<div class="ai-result">${esc(data.result)}</div>${extra}`;
   } catch (err) {
@@ -240,6 +243,20 @@ async function applyBreakdown(parentId) {
   const lines = text.split("\n").map(l => l.replace(/^\d+[\.\)]\s*/, "").trim()).filter(Boolean);
   for (const title of lines) {
     await api("POST", `/api/todos/${parentId}/subtasks`, { title });
+  }
+  closeModal();
+  loadTodos();
+}
+
+async function applyRewrite(id) {
+  const text = document.querySelector("#ai-result-area .ai-result").textContent;
+  const titleMatch = text.match(/Title:\s*(.+)/);
+  const descMatch = text.match(/Description:\s*(.+)/);
+  const updates = {};
+  if (titleMatch) updates.title = titleMatch[1].trim();
+  if (descMatch) updates.description = descMatch[1].trim();
+  if (Object.keys(updates).length > 0) {
+    await api("PATCH", `/api/todos/${id}`, updates);
   }
   closeModal();
   loadTodos();
