@@ -125,6 +125,91 @@ class AIEngine:
         )
         return self._ask(prompt)
 
+    def assist_task(self, todo: Todo) -> str:
+        """Provide detailed, actionable guidance for completing a task."""
+        subtask_info = ""
+        if todo.subtasks:
+            done = [s for s in todo.subtasks if s.is_complete]
+            remaining = [s for s in todo.subtasks if not s.is_complete]
+            subtask_info = (
+                f"\n  Completed subtasks: {', '.join(s.title for s in done) or 'none'}"
+                f"\n  Remaining subtasks: {', '.join(s.title for s in remaining) or 'none'}"
+            )
+
+        prompt = (
+            f"I need detailed help completing this task:\n"
+            f"  Title: {todo.title}\n"
+            f"  Description: {todo.description or '(none)'}\n"
+            f"  Priority: {todo.priority}\n"
+            f"  Status: {todo.status}"
+            f"{subtask_info}\n\n"
+            f"Give me a comprehensive action plan with:\n"
+            f"1. A clear step-by-step walkthrough of how to complete this task\n"
+            f"2. Key considerations or pitfalls to watch out for\n"
+            f"3. Helpful tips or best practices\n"
+            f"4. An estimated effort level (quick / moderate / significant)\n\n"
+            f"Be specific and practical. Tailor advice to this exact task."
+        )
+        return self._ask(prompt)
+
+    def auto_complete_task(self, todo: Todo) -> dict:
+        """Agentically analyze a task and return structured actions to take."""
+        existing_cats = list({t.category for t in self.store.todos if t.category})
+        cats = ", ".join(existing_cats) if existing_cats else "(none yet)"
+
+        prompt = (
+            f"Analyze this task and provide a complete action plan in the exact format below.\n\n"
+            f"  Title: {todo.title}\n"
+            f"  Description: {todo.description or '(none)'}\n"
+            f"  Current priority: {todo.priority}\n"
+            f"  Current category: {todo.category or '(none)'}\n"
+            f"  Existing categories in use: {cats}\n\n"
+            f"Respond in EXACTLY this format (keep each value on a single line):\n"
+            f"PRIORITY: <low/medium/high/urgent>\n"
+            f"CATEGORY: <short category name>\n"
+            f"IMPROVED_TITLE: <clearer version of the title>\n"
+            f"DESCRIPTION: <one-sentence actionable description>\n"
+            f"SUBTASK: <first subtask title>\n"
+            f"SUBTASK: <second subtask title>\n"
+            f"SUBTASK: <third subtask title>\n"
+            f"SUBTASK: <fourth subtask title if needed>\n"
+            f"SUBTASK: <fifth subtask title if needed>\n"
+            f"SUMMARY: <one sentence explaining what you set up and why>\n\n"
+            f"Provide 3-6 concrete, actionable subtasks. Reuse an existing category if it fits."
+        )
+        raw = self._ask(prompt)
+
+        # Parse the structured response
+        result = {
+            "raw": raw,
+            "priority": None,
+            "category": None,
+            "improved_title": None,
+            "description": None,
+            "subtasks": [],
+            "summary": "",
+        }
+        for line in raw.strip().splitlines():
+            line = line.strip()
+            if line.upper().startswith("PRIORITY:"):
+                val = line.split(":", 1)[1].strip().lower()
+                if val in ("low", "medium", "high", "urgent"):
+                    result["priority"] = val
+            elif line.upper().startswith("CATEGORY:"):
+                result["category"] = line.split(":", 1)[1].strip()
+            elif line.upper().startswith("IMPROVED_TITLE:"):
+                result["improved_title"] = line.split(":", 1)[1].strip()
+            elif line.upper().startswith("DESCRIPTION:"):
+                result["description"] = line.split(":", 1)[1].strip()
+            elif line.upper().startswith("SUBTASK:"):
+                val = line.split(":", 1)[1].strip()
+                if val:
+                    result["subtasks"] = result["subtasks"] + [val]
+            elif line.upper().startswith("SUMMARY:"):
+                result["summary"] = line.split(":", 1)[1].strip()
+
+        return result
+
     def chat(self, message: str, todos: list[Todo]) -> str:
         lines = []
         for t in todos:

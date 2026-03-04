@@ -70,6 +70,22 @@ header h1 {
 .btn-ai { background: transparent; border-color: var(--purple); color: var(--purple); }
 .btn-ai:hover { background: rgba(167,139,250,0.1); }
 
+.btn-ai-assist {
+  background: linear-gradient(135deg, rgba(108,140,255,0.15), rgba(167,139,250,0.15));
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 500;
+}
+.btn-ai-assist:hover { background: linear-gradient(135deg, rgba(108,140,255,0.25), rgba(167,139,250,0.25)); }
+
+.btn-ai-auto {
+  background: linear-gradient(135deg, rgba(74,222,128,0.15), rgba(108,140,255,0.15));
+  border-color: var(--green);
+  color: var(--green);
+  font-weight: 500;
+}
+.btn-ai-auto:hover { background: linear-gradient(135deg, rgba(74,222,128,0.25), rgba(108,140,255,0.25)); }
+
 .btn-ghost { background: transparent; border-color: transparent; color: var(--text-dim); }
 .btn-ghost:hover { color: var(--text); background: var(--surface2); }
 
@@ -291,6 +307,90 @@ header h1 {
   color: var(--purple);
   font-style: italic;
   padding: 12px 0;
+}
+
+/* AI sections */
+.ai-section { margin-bottom: 8px; }
+.ai-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+/* AI result header */
+.ai-result-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+/* Agent status animation */
+.ai-agent-status {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--purple);
+  margin-bottom: 10px;
+}
+
+.ai-agent-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 4px;
+}
+
+.ai-step {
+  font-size: 13px;
+  color: var(--text-dim);
+  padding-left: 20px;
+  position: relative;
+}
+.ai-step::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+}
+.ai-step.pending::before {
+  border-color: var(--text-dim);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* Auto-complete action summary */
+.ai-actions-summary {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-action-item {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-action-check {
+  color: var(--green);
+  font-size: 14px;
+  font-weight: bold;
 }
 
 /* Chat */

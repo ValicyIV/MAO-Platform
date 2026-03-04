@@ -184,6 +184,60 @@ def ai_rewrite(todo_id: str):
     return {"result": ai.rewrite_task(todo)}
 
 
+@app.post("/api/ai/assist/{todo_id}")
+def ai_assist(todo_id: str):
+    todo = store.get(todo_id)
+    if not todo:
+        raise HTTPException(404, "Task not found")
+    return {"result": ai.assist_task(todo)}
+
+
+@app.post("/api/ai/auto-complete/{todo_id}")
+def ai_auto_complete(todo_id: str):
+    todo = store.get(todo_id)
+    if not todo:
+        raise HTTPException(404, "Task not found")
+    plan = ai.auto_complete_task(todo)
+
+    # Apply the plan: update task fields and create subtasks
+    updates = {}
+    if plan["priority"]:
+        try:
+            updates["priority"] = Priority(plan["priority"])
+        except ValueError:
+            pass
+    if plan["category"]:
+        updates["category"] = plan["category"]
+    if plan["improved_title"]:
+        updates["title"] = plan["improved_title"]
+    if plan["description"]:
+        updates["description"] = plan["description"]
+    updates["status"] = Status.IN_PROGRESS
+
+    store.update(todo_id, **updates)
+
+    created_subtasks = []
+    for sub_title in plan["subtasks"]:
+        sub = Todo(title=sub_title)
+        store.add_subtask(todo_id, sub)
+        created_subtasks.append(sub.to_dict())
+
+    updated_todo = store.get(todo_id)
+    return {
+        "result": plan["summary"] or "Task has been set up and organized.",
+        "raw": plan["raw"],
+        "actions": {
+            "priority_set": plan["priority"],
+            "category_set": plan["category"],
+            "title_rewritten": plan["improved_title"],
+            "description_set": plan["description"],
+            "subtasks_created": len(created_subtasks),
+            "status_set": "in_progress",
+        },
+        "todo": updated_todo.to_dict() if updated_todo else None,
+    }
+
+
 @app.post("/api/ai/summary")
 def ai_summary():
     return {"result": ai.daily_summary(store.todos)}
