@@ -310,26 +310,37 @@ async function aiAutoComplete(id) {
 }
 
 async function undoAutoComplete(id) {
-  // Reload the original task, remove subtasks added by auto-complete, reset status
-  // Simple approach: reload and let user manage manually
-  const t = await api("GET", `/api/todos/${id}`);
-  // Remove all subtasks (they were just created by auto-complete)
-  for (const sub of (t.subtasks || [])) {
-    await api("DELETE", `/api/todos/${sub.id}`);
+  try {
+    const t = await api("GET", `/api/todos/${id}`);
+    for (const sub of (t.subtasks || [])) {
+      await api("DELETE", `/api/todos/${sub.id}`);
+    }
+    await api("PATCH", `/api/todos/${id}`, { status: "todo" });
+    closeModal();
+    loadTodos();
+  } catch (err) {
+    const area = document.getElementById("ai-result-area");
+    if (area) area.innerHTML += `<div class="ai-result" style="color:var(--red)">Error undoing: ${esc(err.message)}</div>`;
   }
-  await api("PATCH", `/api/todos/${id}`, { status: "todo" });
-  closeModal();
-  loadTodos();
 }
 
 async function applyBreakdown(parentId) {
-  const text = document.querySelector("#ai-result-area .ai-result").textContent;
-  const lines = text.split("\n").map(l => l.replace(/^\d+[\.\)]\s*/, "").trim()).filter(Boolean);
-  for (const title of lines) {
-    await api("POST", `/api/todos/${parentId}/subtasks`, { title });
+  try {
+    const text = document.querySelector("#ai-result-area .ai-result").textContent;
+    const lines = text.split("\n")
+      // Strip numbered prefixes (1. or 1)), bullet markers (- or *), and bold markers (**)
+      .map(l => l.replace(/^(\d+[\.\)]\s*|[-*]\s+)/, "").replace(/\*\*/g, "").trim())
+      // Only keep lines that look like task items (skip preamble/conclusion text)
+      .filter(l => l && !l.endsWith(":") && !l.endsWith("!") && !l.endsWith("?") && l.length < 200);
+    for (const title of lines) {
+      await api("POST", `/api/todos/${parentId}/subtasks`, { title });
+    }
+    closeModal();
+    loadTodos();
+  } catch (err) {
+    const area = document.getElementById("ai-result-area");
+    if (area) area.innerHTML += `<div class="ai-result" style="color:var(--red)">Error adding subtasks: ${esc(err.message)}</div>`;
   }
-  closeModal();
-  loadTodos();
 }
 
 async function applyRewrite(id) {

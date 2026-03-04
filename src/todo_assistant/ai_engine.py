@@ -189,24 +189,53 @@ class AIEngine:
             "subtasks": [],
             "summary": "",
         }
+
+        # Strip markdown bold markers (e.g., **SUBTASK:** -> SUBTASK:)
+        import re
+
+        collecting_subtasks = False
         for line in raw.strip().splitlines():
             line = line.strip()
-            if line.upper().startswith("PRIORITY:"):
-                val = line.split(":", 1)[1].strip().lower()
+            # Remove markdown bold/italic markers around keywords
+            cleaned = re.sub(r"\*{1,2}([A-Z_]+:)\*{1,2}", r"\1", line)
+            upper = cleaned.upper()
+
+            if upper.startswith("PRIORITY:"):
+                collecting_subtasks = False
+                val = cleaned.split(":", 1)[1].strip().lower()
                 if val in ("low", "medium", "high", "urgent"):
                     result["priority"] = val
-            elif line.upper().startswith("CATEGORY:"):
-                result["category"] = line.split(":", 1)[1].strip()
-            elif line.upper().startswith("IMPROVED_TITLE:"):
-                result["improved_title"] = line.split(":", 1)[1].strip()
-            elif line.upper().startswith("DESCRIPTION:"):
-                result["description"] = line.split(":", 1)[1].strip()
-            elif line.upper().startswith("SUBTASK:"):
-                val = line.split(":", 1)[1].strip()
+            elif upper.startswith("CATEGORY:"):
+                collecting_subtasks = False
+                result["category"] = cleaned.split(":", 1)[1].strip()
+            elif upper.startswith("IMPROVED_TITLE:"):
+                collecting_subtasks = False
+                result["improved_title"] = cleaned.split(":", 1)[1].strip()
+            elif upper.startswith("DESCRIPTION:"):
+                collecting_subtasks = False
+                result["description"] = cleaned.split(":", 1)[1].strip()
+            elif upper.startswith("SUBTASK:"):
+                collecting_subtasks = False
+                val = cleaned.split(":", 1)[1].strip()
+                # Strip leading numbering or bullet markers from the value
+                val = re.sub(r"^(\d+[\.\)]\s*|[-*]\s+)", "", val).strip()
                 if val:
-                    result["subtasks"] = result["subtasks"] + [val]
-            elif line.upper().startswith("SUMMARY:"):
-                result["summary"] = line.split(":", 1)[1].strip()
+                    result["subtasks"].append(val)
+            elif upper.startswith("SUBTASKS:"):
+                # Handle plural "SUBTASKS:" followed by a list on subsequent lines
+                collecting_subtasks = True
+                val = cleaned.split(":", 1)[1].strip()
+                val = re.sub(r"^(\d+[\.\)]\s*|[-*]\s+)", "", val).strip()
+                if val:
+                    result["subtasks"].append(val)
+            elif upper.startswith("SUMMARY:"):
+                collecting_subtasks = False
+                result["summary"] = cleaned.split(":", 1)[1].strip()
+            elif collecting_subtasks:
+                # Collect list items after a "SUBTASKS:" header
+                val = re.sub(r"^(\d+[\.\)]\s*|[-*]\s+)", "", line).strip()
+                if val:
+                    result["subtasks"].append(val)
 
         return result
 

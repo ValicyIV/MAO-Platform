@@ -10,6 +10,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+import anthropic
+
 from .models import Todo, Priority, Status
 from .storage import TodoStore
 from .ai_engine import AIEngine
@@ -148,7 +150,12 @@ def ai_breakdown(todo_id: str):
     todo = store.get(todo_id)
     if not todo:
         raise HTTPException(404, "Task not found")
-    return {"result": ai.suggest_breakdown(todo)}
+    try:
+        return {"result": ai.suggest_breakdown(todo)}
+    except anthropic.APIError as e:
+        raise HTTPException(502, f"AI service error: {e.message}")
+    except Exception as e:
+        raise HTTPException(500, f"Failed to get AI suggestions: {str(e)}")
 
 
 @app.post("/api/ai/priority/{todo_id}")
@@ -156,7 +163,12 @@ def ai_priority(todo_id: str):
     todo = store.get(todo_id)
     if not todo:
         raise HTTPException(404, "Task not found")
-    return {"result": ai.suggest_priority(todo)}
+    try:
+        return {"result": ai.suggest_priority(todo)}
+    except anthropic.APIError as e:
+        raise HTTPException(502, f"AI service error: {e.message}")
+    except Exception as e:
+        raise HTTPException(500, f"Failed to get AI suggestion: {str(e)}")
 
 
 @app.post("/api/ai/nextstep/{todo_id}")
@@ -164,7 +176,12 @@ def ai_nextstep(todo_id: str):
     todo = store.get(todo_id)
     if not todo:
         raise HTTPException(404, "Task not found")
-    return {"result": ai.suggest_next_step(todo)}
+    try:
+        return {"result": ai.suggest_next_step(todo)}
+    except anthropic.APIError as e:
+        raise HTTPException(502, f"AI service error: {e.message}")
+    except Exception as e:
+        raise HTTPException(500, f"Failed to get AI suggestion: {str(e)}")
 
 
 @app.post("/api/ai/category/{todo_id}")
@@ -172,8 +189,13 @@ def ai_category(todo_id: str):
     todo = store.get(todo_id)
     if not todo:
         raise HTTPException(404, "Task not found")
-    existing = list({t.category for t in store.todos if t.category})
-    return {"result": ai.suggest_category(todo, existing)}
+    try:
+        existing = list({t.category for t in store.todos if t.category})
+        return {"result": ai.suggest_category(todo, existing)}
+    except anthropic.APIError as e:
+        raise HTTPException(502, f"AI service error: {e.message}")
+    except Exception as e:
+        raise HTTPException(500, f"Failed to get AI suggestion: {str(e)}")
 
 
 @app.post("/api/ai/rewrite/{todo_id}")
@@ -181,7 +203,12 @@ def ai_rewrite(todo_id: str):
     todo = store.get(todo_id)
     if not todo:
         raise HTTPException(404, "Task not found")
-    return {"result": ai.rewrite_task(todo)}
+    try:
+        return {"result": ai.rewrite_task(todo)}
+    except anthropic.APIError as e:
+        raise HTTPException(502, f"AI service error: {e.message}")
+    except Exception as e:
+        raise HTTPException(500, f"Failed to get AI suggestion: {str(e)}")
 
 
 @app.post("/api/ai/assist/{todo_id}")
@@ -189,7 +216,12 @@ def ai_assist(todo_id: str):
     todo = store.get(todo_id)
     if not todo:
         raise HTTPException(404, "Task not found")
-    return {"result": ai.assist_task(todo)}
+    try:
+        return {"result": ai.assist_task(todo)}
+    except anthropic.APIError as e:
+        raise HTTPException(502, f"AI service error: {e.message}")
+    except Exception as e:
+        raise HTTPException(500, f"Failed to get AI suggestion: {str(e)}")
 
 
 @app.post("/api/ai/auto-complete/{todo_id}")
@@ -197,7 +229,12 @@ def ai_auto_complete(todo_id: str):
     todo = store.get(todo_id)
     if not todo:
         raise HTTPException(404, "Task not found")
-    plan = ai.auto_complete_task(todo)
+    try:
+        plan = ai.auto_complete_task(todo)
+    except anthropic.APIError as e:
+        raise HTTPException(502, f"AI service error: {e.message}")
+    except Exception as e:
+        raise HTTPException(500, f"Failed to get AI plan: {str(e)}")
 
     # Apply the plan: update task fields and create subtasks
     updates = {}
@@ -240,12 +277,22 @@ def ai_auto_complete(todo_id: str):
 
 @app.post("/api/ai/summary")
 def ai_summary():
-    return {"result": ai.daily_summary(store.todos)}
+    try:
+        return {"result": ai.daily_summary(store.todos)}
+    except anthropic.APIError as e:
+        raise HTTPException(502, f"AI service error: {e.message}")
+    except Exception as e:
+        raise HTTPException(500, f"Failed to get AI summary: {str(e)}")
 
 
 @app.post("/api/ai/chat")
 def ai_chat(body: ChatRequest):
-    return {"result": ai.chat(body.message, store.todos)}
+    try:
+        return {"result": ai.chat(body.message, store.todos)}
+    except anthropic.APIError as e:
+        raise HTTPException(502, f"AI service error: {e.message}")
+    except Exception as e:
+        raise HTTPException(500, f"Failed to get AI response: {str(e)}")
 
 
 # -- Static files (frontend) --------------------------------------------------

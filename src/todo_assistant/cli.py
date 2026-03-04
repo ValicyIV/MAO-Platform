@@ -323,8 +323,10 @@ class App:
         console.print(Panel(result, title="Suggested subtasks", border_style="green"))
 
         if _input("Add these as subtasks? (y/n)", "n").lower() == "y":
+            import re
             for line in result.strip().splitlines():
-                cleaned = line.lstrip("0123456789.) -").strip()
+                # Strip numbered prefixes (1. or 1)) and bullet markers (- or *)
+                cleaned = re.sub(r"^(\d+[\.\)]\s*|[-*]\s+)", "", line).strip()
                 if cleaned:
                     sub = Todo(title=cleaned)
                     self.store.add_subtask(todo_id, sub)
