@@ -208,13 +208,26 @@ function openAI(id) {
   const mc = document.getElementById("modal-content");
   mc.innerHTML = `
     <h2>AI Actions: ${esc(t.title)}</h2>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-      <button class="btn btn-ai" onclick="aiAction('breakdown','${id}')">Break Down</button>
-      <button class="btn btn-ai" onclick="aiAction('priority','${id}')">Suggest Priority</button>
-      <button class="btn btn-ai" onclick="aiAction('nextstep','${id}')">Next Step</button>
-      <button class="btn btn-ai" onclick="aiAction('category','${id}')">Suggest Category</button>
-      <button class="btn btn-ai" onclick="aiAction('rewrite','${id}')">Rewrite Task</button>
+
+    <div class="ai-section">
+      <h3 class="ai-section-title">Assistance</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn btn-ai-assist" onclick="aiAssist('${id}')">Assist Me</button>
+        <button class="btn btn-ai-auto" onclick="aiAutoComplete('${id}')">Auto-Complete</button>
+      </div>
     </div>
+
+    <div class="ai-section">
+      <h3 class="ai-section-title">Tools</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn btn-ai" onclick="aiAction('breakdown','${id}')">Break Down</button>
+        <button class="btn btn-ai" onclick="aiAction('priority','${id}')">Suggest Priority</button>
+        <button class="btn btn-ai" onclick="aiAction('nextstep','${id}')">Next Step</button>
+        <button class="btn btn-ai" onclick="aiAction('category','${id}')">Suggest Category</button>
+        <button class="btn btn-ai" onclick="aiAction('rewrite','${id}')">Rewrite Task</button>
+      </div>
+    </div>
+
     <div id="ai-result-area"></div>`;
   openModal();
 }
@@ -236,6 +249,77 @@ async function aiAction(action, id) {
   } catch (err) {
     area.innerHTML = `<div class="ai-result" style="color:var(--red)">Error: ${esc(err.message)}</div>`;
   }
+}
+
+// -- AI Assist & Auto-Complete -----------------------------------------------
+
+async function aiAssist(id) {
+  const area = document.getElementById("ai-result-area");
+  area.innerHTML = `<div class="ai-loading">Analyzing task and preparing guidance...</div>`;
+  try {
+    const data = await api("POST", `/api/ai/assist/${id}`);
+    area.innerHTML = `
+      <div class="ai-result-header">Step-by-Step Guidance</div>
+      <div class="ai-result">${esc(data.result)}</div>`;
+  } catch (err) {
+    area.innerHTML = `<div class="ai-result" style="color:var(--red)">Error: ${esc(err.message)}</div>`;
+  }
+}
+
+async function aiAutoComplete(id) {
+  const area = document.getElementById("ai-result-area");
+  area.innerHTML = `
+    <div class="ai-loading">
+      <div class="ai-agent-status">Agent is working...</div>
+      <div class="ai-agent-steps">
+        <div class="ai-step pending">Analyzing task</div>
+        <div class="ai-step pending">Setting priority & category</div>
+        <div class="ai-step pending">Creating subtasks</div>
+        <div class="ai-step pending">Organizing workflow</div>
+      </div>
+    </div>`;
+
+  try {
+    const data = await api("POST", `/api/ai/auto-complete/${id}`);
+    const a = data.actions;
+
+    // Build action summary
+    let actionItems = [];
+    if (a.title_rewritten) actionItems.push(`Title updated`);
+    if (a.description_set) actionItems.push(`Description set`);
+    if (a.priority_set) actionItems.push(`Priority set to ${a.priority_set}`);
+    if (a.category_set) actionItems.push(`Category set to "${a.category_set}"`);
+    if (a.subtasks_created) actionItems.push(`${a.subtasks_created} subtask(s) created`);
+    actionItems.push(`Status set to in-progress`);
+
+    const actionHTML = actionItems.map(item =>
+      `<div class="ai-action-item"><span class="ai-action-check">&#10003;</span> ${esc(item)}</div>`
+    ).join("");
+
+    area.innerHTML = `
+      <div class="ai-result-header">Auto-Complete Results</div>
+      <div class="ai-actions-summary">${actionHTML}</div>
+      <div class="ai-result">${esc(data.result)}</div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="undoAutoComplete('${id}')">Undo All</button>
+        <button class="btn btn-primary" onclick="closeModal();loadTodos()">Done</button>
+      </div>`;
+  } catch (err) {
+    area.innerHTML = `<div class="ai-result" style="color:var(--red)">Error: ${esc(err.message)}</div>`;
+  }
+}
+
+async function undoAutoComplete(id) {
+  // Reload the original task, remove subtasks added by auto-complete, reset status
+  // Simple approach: reload and let user manage manually
+  const t = await api("GET", `/api/todos/${id}`);
+  // Remove all subtasks (they were just created by auto-complete)
+  for (const sub of (t.subtasks || [])) {
+    await api("DELETE", `/api/todos/${sub.id}`);
+  }
+  await api("PATCH", `/api/todos/${id}`, { status: "todo" });
+  closeModal();
+  loadTodos();
 }
 
 async function applyBreakdown(parentId) {

@@ -21,6 +21,7 @@ COMMANDS = [
     "add", "list", "done", "remove", "view", "edit",
     "start", "subtask", "breakdown", "priority", "nextstep",
     "category", "summary", "chat", "search", "clear-done",
+    "assist", "auto-complete",
     "help", "quit",
 ]
 
@@ -37,12 +38,14 @@ HELP_TEXT = """\
   [cyan]search[/cyan]      Search tasks by keyword
 
 [bold]AI-powered:[/bold]
-  [cyan]breakdown[/cyan] ID   Ask AI to break a task into subtasks
-  [cyan]priority[/cyan] ID    Ask AI to suggest a priority
-  [cyan]nextstep[/cyan] ID    Ask AI what to do next
-  [cyan]category[/cyan] ID    Ask AI to suggest a category
-  [cyan]summary[/cyan]        Get a daily summary & focus advice
-  [cyan]chat[/cyan]            Free-form chat with the AI about your tasks
+  [cyan]assist[/cyan] ID         Get detailed step-by-step guidance for a task
+  [cyan]auto-complete[/cyan] ID  Let AI organize the task: set priority, category, create subtasks
+  [cyan]breakdown[/cyan] ID      Ask AI to break a task into subtasks
+  [cyan]priority[/cyan] ID       Ask AI to suggest a priority
+  [cyan]nextstep[/cyan] ID       Ask AI what to do next
+  [cyan]category[/cyan] ID       Ask AI to suggest a category
+  [cyan]summary[/cyan]           Get a daily summary & focus advice
+  [cyan]chat[/cyan]               Free-form chat with the AI about your tasks
 
 [bold]Housekeeping:[/bold]
   [cyan]clear-done[/cyan]   Remove all completed tasks
@@ -253,6 +256,63 @@ class App:
         console.print(f"  Cleared {removed} completed task(s).")
 
     # -- AI commands -----------------------------------------------------------
+
+    def cmd_assist(self, todo_id: str) -> None:
+        todo = self._require(todo_id)
+        if not todo:
+            return
+        console.print("  [dim]Analyzing task and preparing guidance...[/dim]")
+        result = self.ai.assist_task(todo)
+        console.print(Panel(result, title="Step-by-Step Guidance", border_style="bright_blue"))
+
+    def cmd_auto_complete(self, todo_id: str) -> None:
+        todo = self._require(todo_id)
+        if not todo:
+            return
+        console.print("  [dim]AI agent is working on your task...[/dim]")
+        plan = self.ai.auto_complete_task(todo)
+
+        # Apply the plan
+        updates = {}
+        actions = []
+
+        if plan["priority"]:
+            try:
+                updates["priority"] = Priority(plan["priority"])
+                actions.append(f"Priority → {plan['priority']}")
+            except ValueError:
+                pass
+        if plan["category"]:
+            updates["category"] = plan["category"]
+            actions.append(f"Category → {plan['category']}")
+        if plan["improved_title"]:
+            updates["title"] = plan["improved_title"]
+            actions.append(f"Title rewritten")
+        if plan["description"]:
+            updates["description"] = plan["description"]
+            actions.append(f"Description set")
+        updates["status"] = Status.IN_PROGRESS
+        actions.append("Status → in_progress")
+
+        self.store.update(todo_id, **updates)
+
+        subtask_count = 0
+        for sub_title in plan["subtasks"]:
+            sub = Todo(title=sub_title)
+            self.store.add_subtask(todo_id, sub)
+            subtask_count += 1
+
+        if subtask_count:
+            actions.append(f"{subtask_count} subtask(s) created")
+
+        action_text = "\n".join(f"  [green]✓[/green] {a}" for a in actions)
+        summary = plan["summary"] or "Task has been set up and organized."
+
+        console.print(Panel(
+            f"[bold]Actions taken:[/bold]\n{action_text}\n\n{summary}",
+            title="Auto-Complete Results",
+            border_style="green",
+        ))
 
     def cmd_breakdown(self, todo_id: str) -> None:
         todo = self._require(todo_id)
