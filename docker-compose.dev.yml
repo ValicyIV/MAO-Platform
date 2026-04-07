@@ -1,0 +1,28 @@
+version: "3.9"
+
+# Development overrides — mounts source for hot reload.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  api:
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./apps/api:/app         # mount source for hot reload
+      - ./data/agent-memory:/app/data/memory
+      - ./data/kuzu:/app/data/kuzu
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+
+  web:
+    # In dev, run Vite directly rather than the nginx-served build
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "corepack enable pnpm && pnpm install && pnpm dev --host"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./apps/web:/app
+      - ./packages:/packages
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_WS_URL: ws://localhost:8000

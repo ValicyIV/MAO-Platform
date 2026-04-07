@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+build/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Data (mounted volumes — keep dirs, ignore content)
+data/agent-memory/**
+data/kuzu/**
+!data/agent-memory/.gitkeep
+!data/kuzu/.gitkeep
+
+# Turborepo
+.turbo/
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python virtual envs
+.venv/
+venv/
+
+# uv
+.python-version
+
+# Coverage
+coverage/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
