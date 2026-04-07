@@ -103,9 +103,8 @@ services:
       dockerfile: apps/web/Dockerfile
     ports:
       - "5173:80"
-    depends_on:
-      api:
-        condition: service_healthy
+    # No depends_on — nginx serves static files independently of the API.
+    # The frontend WebSocket client reconnects automatically when the API is ready.
     environment:
       VITE_API_URL: http://localhost:8000
       VITE_WS_URL: ws://localhost:8000

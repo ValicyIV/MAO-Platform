@@ -123,25 +123,26 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_at_least_one_provider(self) -> "Settings":
-        """Fail fast at startup if no LLM provider is reachable."""
+        """Warn at startup if no LLM provider key is configured."""
         if not self.anthropic_api_key and not self.openrouter_api_key:
-            # Ollama doesn't need an API key — just a running server
-            import urllib.request, urllib.error
+            import logging
+            import urllib.request
+            log = logging.getLogger(__name__)
+            ollama_reachable = False
             try:
                 urllib.request.urlopen(f"{self.ollama_base_url}/api/tags", timeout=2)
+                ollama_reachable = True
             except Exception:
-                raise ValueError(
-                    "No LLM provider configured. Set at least one of:
-"
-                    "  ANTHROPIC_API_KEY   — for claude-* models
-"
-                    "  OPENROUTER_API_KEY  — for any cloud model via openrouter.ai
-"
-                    "  OLLAMA_BASE_URL     — for local models (Ollama must be running)
-"
-                    "See .env.example for details."
+                pass
+            if not ollama_reachable:
+                log.warning(
+                    "No LLM provider configured. "
+                    "Set ANTHROPIC_API_KEY, OPENROUTER_API_KEY, or point OLLAMA_BASE_URL "
+                    "at a running Ollama instance. See .env.example for details. "
+                    "Agent workflows will fail until a provider is configured."
                 )
         return self
+
 
     @model_validator(mode="after")
     def validate_memory_tokens(self) -> "Settings":
