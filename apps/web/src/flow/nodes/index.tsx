@@ -63,12 +63,7 @@ export const SpecialistNode = memo(({ id, data }: NodeProps<SpecialistNodeData>)
   const liveStatus = useAgentStatus(data.agentId);
   const status = liveStatus?.status ?? data.status;
 
-  const MODEL_COLORS: Record<string, string> = {
-    "claude-opus-4-6":   "bg-violet-500/20 text-violet-300 border-violet-500/30",
-    "claude-sonnet-4-6": "bg-blue-500/20 text-blue-300 border-blue-500/30",
-    "claude-haiku-4-5":  "bg-teal-500/20 text-teal-300 border-teal-500/30",
-  };
-  const modelColor = MODEL_COLORS[data.model] ?? "bg-neutral-700 text-neutral-300";
+  const modelColor = require("@/utils/modelUtils").modelBadgeClasses(data.model);
 
   return (
     <div className="specialist-node min-w-64 rounded-lg border border-neutral-700 bg-neutral-850 shadow-md">

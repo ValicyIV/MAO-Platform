@@ -226,7 +226,7 @@ export class AGUIEventRouter {
         agentId,
         agentName,
         role: "research" as any,
-        model: "claude-sonnet-4-6" as any,
+        model: (event as any).model ?? "unknown",
         tools: [],
         status: AgentStatus.Running,
         tokenCount: 0,

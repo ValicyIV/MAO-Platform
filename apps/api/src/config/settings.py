@@ -22,8 +22,25 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # ── Required ──────────────────────────────────────────────────────────────
-    anthropic_api_key: str = Field(..., description="Anthropic API key")
+    # ── Required for Anthropic models ───────────────────────────────────────────
+    # Set to "" if you only use OpenRouter or Ollama
+    anthropic_api_key: str = Field(default="", description="Anthropic API key")
+
+    # ── OpenRouter (optional — cloud models from any provider) ───────────────
+    # Get a free key at https://openrouter.ai — pay per token, no subscription
+    openrouter_api_key: str = Field(default="", description="OpenRouter API key")
+
+    # ── Ollama (optional — local models) ────────────────────────────────────
+    # Install: https://ollama.ai — runs llama3, mistral, phi-3, etc. locally
+    ollama_base_url: str = Field(default="http://localhost:11434", description="Ollama server URL")
+
+    # ── Extraction model (used by knowledge graph consolidation) ────────────
+    # Any model ID supported by the router. Cheapest option recommended.
+    # Examples: claude-haiku-4-5 | ollama/llama3.2 | openai/gpt-4o-mini
+    extraction_model: str = Field(
+        default="claude-haiku-4-5",
+        description="Model used for KG entity extraction. Pick cheapest available.",
+    )
 
     # ── Langfuse ──────────────────────────────────────────────────────────────
     langfuse_public_key: str = Field(default="", description="Langfuse public key")
@@ -67,10 +84,6 @@ class Settings(BaseSettings):
         default="./data/kuzu",
         description="Path to Kuzu embedded graph DB directory",
     )
-    mem0_api_key: str = Field(
-        default="",
-        description="Mem0 API key (leave empty for OSS self-hosted)",
-    )
     memory_graph_enabled: bool = Field(default=True)
 
     # Token budgets for context injection (Pattern 15)
@@ -107,6 +120,28 @@ class Settings(BaseSettings):
     thinking_budget_tokens: int = Field(default=8000)
     a2a_enabled: bool = Field(default=False)
     kairos_daemon_enabled: bool = Field(default=False)
+
+    @model_validator(mode="after")
+    def validate_at_least_one_provider(self) -> "Settings":
+        """Fail fast at startup if no LLM provider is reachable."""
+        if not self.anthropic_api_key and not self.openrouter_api_key:
+            # Ollama doesn't need an API key — just a running server
+            import urllib.request, urllib.error
+            try:
+                urllib.request.urlopen(f"{self.ollama_base_url}/api/tags", timeout=2)
+            except Exception:
+                raise ValueError(
+                    "No LLM provider configured. Set at least one of:
+"
+                    "  ANTHROPIC_API_KEY   — for claude-* models
+"
+                    "  OPENROUTER_API_KEY  — for any cloud model via openrouter.ai
+"
+                    "  OLLAMA_BASE_URL     — for local models (Ollama must be running)
+"
+                    "See .env.example for details."
+                )
+        return self
 
     @model_validator(mode="after")
     def validate_memory_tokens(self) -> "Settings":

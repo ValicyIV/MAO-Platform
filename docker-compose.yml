@@ -30,6 +30,9 @@ services:
       DATABASE_URL: postgresql+asyncpg://mao:mao@postgres:5432/mao
       REDIS_URL: redis://redis:6379/0
       KUZU_DB_PATH: /app/data/kuzu
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      EXTRACTION_MODEL: ${EXTRACTION_MODEL:-claude-haiku-4-5}
       MEMORY_GRAPH_ENABLED: "true"
       CORS_ORIGINS: '["http://localhost:5173"]'
     volumes:
@@ -96,6 +99,27 @@ services:
       postgres:
         condition: service_healthy
 
+  # ── Ollama (optional — local models) ──────────────────────────────────────
+  # Uncomment this service to run local models via Ollama.
+  # Pull models with: docker compose exec ollama ollama pull llama3.2
+  #
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   # For GPU support (NVIDIA):
+  #   # deploy:
+  #   #   resources:
+  #   #     reservations:
+  #   #       devices:
+  #   #         - driver: nvidia
+  #   #           count: all
+  #   #           capabilities: [gpu]
+
+
 volumes:
   postgres_data:
   redis_data:
+  # ollama_data:  # uncomment when Ollama service is enabled

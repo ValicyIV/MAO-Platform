@@ -22,11 +22,25 @@ export enum AgentStatus {
   Error = "error",
 }
 
+// ModelTier is kept for backward compatibility with Anthropic-specific UI hints.
+// For non-Anthropic models, the model field on AgentConfig is a free string.
 export enum ModelTier {
-  Haiku = "claude-haiku-4-5",
+  // Anthropic
+  Haiku  = "claude-haiku-4-5",
   Sonnet = "claude-sonnet-4-6",
-  Opus = "claude-opus-4-6",
+  Opus   = "claude-opus-4-6",
+  // OpenRouter shortcuts (the actual model IDs are the full string)
+  GPT4o        = "openai/gpt-4o",
+  GPT4oMini    = "openai/gpt-4o-mini",
+  GeminiFlash  = "google/gemini-2.0-flash-exp",
+  Llama70B     = "meta-llama/llama-3.3-70b-instruct",
+  // Ollama — prefix "ollama/"
+  OllamaLlama  = "ollama/llama3.2",
+  OllamaMistral= "ollama/mistral",
 }
+
+// Use this type anywhere the model ID is a free string (registry entries, API responses)
+export type ModelId = ModelTier | string;
 
 export enum PrivacyTier {
   Safe = "safe",
@@ -38,7 +52,7 @@ export interface AgentConfig {
   id: string;
   name: string;
   role: AgentRole;
-  model: ModelTier;
+  model: ModelId;  // any provider model ID
   description: string;
   tools: string[];
   memoryEnabled: boolean;

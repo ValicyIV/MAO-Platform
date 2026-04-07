@@ -60,7 +60,9 @@ class StreamPartMapper:
             content = chunk.get("content", "")
 
             if isinstance(content, list):
-                # Claude returns a list of content blocks
+                # Anthropic returns content blocks — thinking blocks only appear
+                # for claude-* models. Other providers (OpenRouter, Ollama) emit
+                # plain text strings, handled by the elif branch below.
                 for block in content:
                     if block.get("type") == "thinking":
                         delta = block.get("thinking", "")

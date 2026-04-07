@@ -6,12 +6,13 @@ Runs during idle heartbeat cycles (Pattern 6). Three stages per agent:
   Stage 1 — Hot cache update (Haiku sub-agent)
     Reads recent episodes, rewrites agent_memory.json with deduped/pruned facts.
 
-  Stage 2 — Knowledge graph extraction (Mem0g pipeline)
-    Passes episode text through Mem0g: entity extraction → relation inference
-    → conflict detection → write to Kuzu.
+  Stage 2 — Knowledge graph extraction (our Kuzu + fastembed + Claude pipeline)
+    Passes episode text through our custom KG: Claude entity extraction → fastembed
+    embedding → conflict detection → write to Kuzu directly. No Mem0g.
 
-  Stage 3 — Procedural memory update (LangMem)
-    Detects repeated tool-use patterns and updates procedural memory.
+  Stage 3 — Procedural patterns (stored in hot cache, not LangMem)
+    Detects repeated tool-use patterns and saves them to agent_memory.json.
+    LangMem removed: 59.82s p95 latency makes it unusable.
 
 Usage:
     from src.persistence.memory_consolidator import consolidator
@@ -152,11 +153,12 @@ class MemoryConsolidator:
     async def _consolidate_hot_cache(
         self, agent_id: str, episodes_text: str
     ) -> list[dict[str, Any]]:
-        """Stage 1: Use Claude Haiku to extract facts from episodes."""
-        from anthropic import AsyncAnthropic
+        """Stage 1: Use the extraction model to distill facts from episodes."""
+        from langchain_core.messages import SystemMessage, HumanMessage
+        from src.agents.model_router import get_extraction_model
         from src.config.prompts import get_prompt
 
-        client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+        llm = get_extraction_model()
         current = await load_core_memory(agent_id)
         current_facts = json.dumps(current.get("facts", []), indent=2)
 
@@ -164,18 +166,15 @@ class MemoryConsolidator:
             "consolidation",
             agent_role=agent_id,
             current_memory=current_facts,
-            episodes=episodes_text[:6000],  # hard cap to avoid token overrun
+            episodes=episodes_text[:6000],
             days=str(settings.memory_consolidation_batch_days),
         )
 
-        response = await client.messages.create(
-            model="claude-haiku-4-5",  # cheapest model for this task
-            max_tokens=2000,
-            system=prompt,
-            messages=[{"role": "user", "content": "Consolidate the memory now."}],
-        )
-
-        content = response.content[0].text if response.content else "{}"
+        resp = await llm.ainvoke([
+            SystemMessage(content=prompt),
+            HumanMessage(content="Consolidate the memory now."),
+        ])
+        content = resp.content if isinstance(resp.content, str) else str(resp.content)
         try:
             parsed = json.loads(content)
             return parsed.get("facts", [])
@@ -184,52 +183,35 @@ class MemoryConsolidator:
             return []
 
     async def _update_procedural(
-        self, agent_id: str, episodes: list[dict[str, Any]]
+        self,
+        agent_id: str,
+        episodes: list[dict],
     ) -> list[str]:
-        """Stage 3: Detect repeated tool-use patterns and update LangMem."""
-        # Count tool usage frequencies
-        tool_counts: dict[str, int] = {}
-        for episode in episodes:
-            if episode.get("entry_type") == "tool_call":
-                tool = episode.get("tool_name", "")
+        """
+        Stage 3: Detect repeated tool-use patterns.
+        Stores patterns in the knowledge graph as Procedure entities.
+        LangMem removed — p95 latency was 59.82s. Now uses our KG at ~15ms.
+        """
+        from src.persistence.knowledge_graph import knowledge_graph
+
+        tool_calls: dict[str, int] = {}
+        for ep in episodes:
+            if ep.get("entry_type") == "tool_call":
+                tool = ep.get("toolName", "")
                 if tool:
-                    tool_counts[tool] = tool_counts.get(tool, 0) + 1
+                    tool_calls[tool] = tool_calls.get(tool, 0) + 1
 
-        patterns = []
-        for tool, count in tool_counts.items():
-            if count >= 3:  # repeated 3+ times = a pattern
-                patterns.append(f"Uses {tool} frequently ({count} times in recent history)")
-
-        # Try to persist via LangMem if available
-        try:
-            from langmem import create_memory_store  # type: ignore[import]
-            store = create_memory_store()
-            for pattern in patterns:
-                await store.aput(
-                    (agent_id, "procedural"),
-                    key=f"pattern_{hash(pattern)}",
-                    value={"pattern": pattern, "agent_id": agent_id},
+        # Record tools used >= 3 times as learned procedures in the KG
+        patterns: list[str] = []
+        for tool, count in tool_calls.items():
+            if count >= 3:
+                procedure = f"{agent_id} consistently uses {tool} ({count} times in recent sessions)"
+                await knowledge_graph.add_memories(
+                    agent_id=agent_id,
+                    content=procedure,
                 )
-        except Exception:
-            pass  # LangMem optional
+                patterns.append(procedure)
 
         return patterns
 
-
-def _format_episodes(episodes: list[dict[str, Any]]) -> str:
-    """Format episode list as a readable text for LLM processing."""
-    lines = []
-    for ep in episodes[-50:]:  # last 50 entries max
-        ts = ep.get("date", "")
-        entry_type = ep.get("entry_type", "")
-        content = ep.get("content", "")
-        tool = ep.get("tool_name", "")
-        prefix = f"[{ts}] [{entry_type}]"
-        if tool:
-            prefix += f" tool={tool}"
-        lines.append(f"{prefix}: {content[:300]}")
-    return "\n".join(lines)
-
-
-# Singleton
-consolidator = MemoryConsolidator()
+    
