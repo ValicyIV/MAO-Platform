@@ -1,58 +1,5 @@
-version: "3.9"
-
 services:
-  # ── Frontend ──────────────────────────────────────────
-  web:
-    build:
-      context: ./apps/web
-      dockerfile: Dockerfile
-    ports:
-      - "5173:80"
-    depends_on:
-      api:
-        condition: service_healthy
-    environment:
-      VITE_API_URL: http://localhost:8000
-      VITE_WS_URL: ws://localhost:8000
-
-  # ── Backend ───────────────────────────────────────────
-  api:
-    build:
-      context: ./apps/api
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    environment:
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
-      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
-      LANGFUSE_HOST: http://langfuse:3001
-      DATABASE_URL: postgresql+asyncpg://mao:mao@postgres:5432/mao
-      REDIS_URL: redis://redis:6379/0
-      KUZU_DB_PATH: /app/data/kuzu
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
-      EXTRACTION_MODEL: ${EXTRACTION_MODEL:-claude-haiku-4-5}
-      MEMORY_GRAPH_ENABLED: "true"
-      CORS_ORIGINS: '["http://localhost:5173"]'
-    volumes:
-      - ./data/agent-memory:/app/data/memory   # hot cache + episode logs
-      - ./data/kuzu:/app/data/kuzu             # Kuzu knowledge graph
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      langfuse:
-        condition: service_started
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-
-  # ── PostgreSQL ────────────────────────────────────────
+  # ── PostgreSQL ── start first, everything depends on it ───────────────────
   postgres:
     image: postgres:16-alpine
     environment:
@@ -61,31 +8,40 @@ services:
       POSTGRES_PASSWORD: mao
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mao"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
     ports:
       - "5432:5432"
+    healthcheck:
+      # pg_isready only checks the socket. pg_isready + a dummy query confirms
+      # the DB is fully ready to accept connections — prevents the Prisma race.
+      test:
+        - "CMD-SHELL"
+        - "pg_isready -U mao && psql -U mao -c 'SELECT 1' > /dev/null 2>&1"
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
 
-  # ── Redis ─────────────────────────────────────────────
+  # ── Redis ─────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
+    ports:
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
-    ports:
-      - "6379:6379"
 
-  # ── Langfuse (observability) ──────────────────────────
+  # ── Langfuse (observability) ───────────────────────────────────────────────
+  # Langfuse runs Prisma migrations on startup. If Postgres isn't 100% ready
+  # yet (even after pg_isready passes), Prisma throws P1001. restart:on-failure
+  # makes Docker retry automatically — second attempt always succeeds.
   langfuse:
     image: langfuse/langfuse:2
+    restart: on-failure
     ports:
       - "3001:3000"
     environment:
@@ -99,9 +55,64 @@ services:
       postgres:
         condition: service_healthy
 
-  # ── Ollama (optional — local models) ──────────────────────────────────────
-  # Uncomment this service to run local models via Ollama.
-  # Pull models with: docker compose exec ollama ollama pull llama3.2
+  # ── Backend API ────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    restart: on-failure
+    environment:
+      # At least one of ANTHROPIC_API_KEY or OPENROUTER_API_KEY must be set.
+      # See .env.example for all options including Ollama.
+      ANTHROPIC_API_KEY:  ${ANTHROPIC_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OLLAMA_BASE_URL:    ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      EXTRACTION_MODEL:   ${EXTRACTION_MODEL:-claude-haiku-4-5}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: http://langfuse:3001
+      DATABASE_URL: postgresql+asyncpg://mao:mao@postgres:5432/mao
+      REDIS_URL: redis://redis:6379/0
+      KUZU_DB_PATH: /app/data/kuzu
+      MEMORY_GRAPH_ENABLED: "true"
+      CORS_ORIGINS: '["http://localhost:5173"]'
+    volumes:
+      - ./data/agent-memory:/app/data/memory
+      - ./data/kuzu:/app/data/kuzu
+      - ./data/agents.json:/app/data/agents.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      langfuse:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Frontend (production build) ────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_WS_URL: ws://localhost:8000
+
+  # ── Ollama (optional — local models, zero cost) ────────────────────────────
+  # Uncomment to run local models. Pull with:
+  #   docker compose exec ollama ollama pull llama3.2
   #
   # ollama:
   #   image: ollama/ollama:latest
@@ -109,7 +120,7 @@ services:
   #     - "11434:11434"
   #   volumes:
   #     - ollama_data:/root/.ollama
-  #   # For GPU support (NVIDIA):
+  #   # NVIDIA GPU support:
   #   # deploy:
   #   #   resources:
   #   #     reservations:
@@ -118,8 +129,7 @@ services:
   #   #           count: all
   #   #           capabilities: [gpu]
 
-
 volumes:
   postgres_data:
   redis_data:
-  # ollama_data:  # uncomment when Ollama service is enabled
+  # ollama_data:

@@ -1,28 +1,56 @@
-version: "3.9"
-
-# Development overrides — mounts source for hot reload.
+# Development overrides — hot reload for API + frontend.
 # Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# What changes from production:
+#   api  — mounts src/ only (not /app), enables uvicorn --reload
+#   web  — runs Vite dev server instead of nginx, mounts monorepo root
 
 services:
   api:
-    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    # uvicorn --reload watches /app/src for changes
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/src
     volumes:
-      - ./apps/api:/app         # mount source for hot reload
+      # IMPORTANT: mount src/ only, NOT the whole /app directory.
+      # Mounting /app would erase the .venv built into the image → uvicorn not found.
+      - ./apps/api/src:/app/src
+      - ./apps/api/pyproject.toml:/app/pyproject.toml:ro
       - ./data/agent-memory:/app/data/memory
       - ./data/kuzu:/app/data/kuzu
+      - ./data/agents.json:/app/data/agents.json
     environment:
       PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
 
   web:
-    # In dev, run Vite directly rather than the nginx-served build
+    # Vite dev server with HMR — replaces the nginx prod build.
     image: node:20-alpine
-    working_dir: /app
-    command: sh -c "corepack enable pnpm && pnpm install && pnpm dev --host"
+    working_dir: /workspace
+    # Install deps if missing, then start Vite for the web app only.
+    command: >
+      sh -c "
+        corepack enable pnpm &&
+        pnpm install 2>&1 | tail -5 &&
+        pnpm --filter @mao/web dev --host 0.0.0.0 --port 5173
+      "
     ports:
       - "5173:5173"
     volumes:
-      - ./apps/web:/app
-      - ./packages:/packages
+      # Mount the entire monorepo root at /workspace.
+      # This keeps the tsconfig path aliases intact:
+      #   apps/web tsconfig → ../../packages/shared-types → /workspace/packages/shared-types ✓
+      - .:/workspace
+      # Named volumes keep node_modules out of the bind-mount so installs survive restarts.
+      - web_node_modules:/workspace/node_modules
+      - web_app_node_modules:/workspace/apps/web/node_modules
+      - web_shared_node_modules:/workspace/packages/shared-types/node_modules
     environment:
       VITE_API_URL: http://localhost:8000
       VITE_WS_URL: ws://localhost:8000
+    # In dev, don't wait for the API — start Vite immediately so you can work on the UI
+    # even if the backend isn't healthy yet. The WS connection will reconnect automatically.
+    depends_on: {}
+
+volumes:
+  web_node_modules:
+  web_app_node_modules:
+  web_shared_node_modules:
