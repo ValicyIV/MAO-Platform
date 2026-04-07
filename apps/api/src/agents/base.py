@@ -63,15 +63,21 @@ privacy_router = PrivacyRouter()
 
 @dataclass
 class AgentConfig:
-    name:              str
-    role:              str
-    model:             str        = ""
-    description:       str        = ""
-    tools:             list[Any]  = field(default_factory=list)
-    temperature:       float      = 1.0
-    thinking_enabled:  bool       = True
+    name:               str
+    role:               str
+    model:              str       = ""
+    description:        str       = ""
+    emoji:              str       = "🤖"
+    # personality: injected at the top of the system prompt, above tools/instructions
+    personality:        str       = ""
+    # system_prompt: if set, fully replaces the role-based prompt from prompts.py
+    system_prompt:      str       = ""
+    tools:              list[Any] = field(default_factory=list)
+    temperature:        float     = 1.0
+    thinking_enabled:   bool      = True
     thinking_budget_tokens: int   = 8000
-    memory_enabled:    bool       = True
+    memory_enabled:     bool      = True
+    is_custom:          bool      = False   # True = created via UI, not a built-in
 
     def __post_init__(self) -> None:
         if not self.model:
@@ -117,9 +123,21 @@ def create_specialist_agent(config: AgentConfig) -> Any:
         from src.observability.langfuse_handler import get_handler
         callbacks.append(get_handler())
 
+    # Build system prompt — personality + role prompt, or full override
+    from src.config.prompts import get_prompt
+    if config.system_prompt:
+        prompt = config.system_prompt
+    else:
+        role_prompt = get_prompt(config.role)
+        if config.personality:
+            prompt = f"{config.personality}\n\n{role_prompt}"
+        else:
+            prompt = role_prompt
+
     agent = create_react_agent(
         model=llm,
         tools=all_tools,
+        prompt=prompt if prompt else None,
     )
 
     logger.info(

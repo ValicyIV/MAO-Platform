@@ -87,3 +87,66 @@ class ErrorResponse(BaseModel):
     error: str
     code: str
     detail: str | None = None
+
+
+# ── Agent config ──────────────────────────────────────────────────────────────
+
+class AgentConfigFull(BaseModel):
+    id:                    str
+    name:                  str
+    role:                  str
+    model:                 str
+    description:           str
+    emoji:                 str
+    personality:           str
+    system_prompt:         str
+    temperature:           float
+    thinking_enabled:      bool
+    thinking_budget_tokens: int
+    memory_enabled:        bool
+    is_custom:             bool
+    tools:                 list[str]
+    # Derived (not stored)
+    provider:              str
+    display_name:          str
+    badge_color:           str
+
+
+class AgentConfigPatch(BaseModel):
+    """Fields the caller may update at runtime."""
+    name:                  str | None = None
+    model:                 str | None = None
+    description:           str | None = None
+    emoji:                 str | None = None
+    personality:           str | None = None
+    system_prompt:         str | None = None
+    temperature:           float | None = None
+    thinking_enabled:      bool | None = None
+    thinking_budget_tokens: int | None = None
+    memory_enabled:        bool | None = None
+    tools:                 list[str] | None = None
+
+
+class AgentCreateRequest(BaseModel):
+    """Request body for POST /api/agents/config (create new custom agent)."""
+    id:                    str = Field(..., pattern=r"^[a-z0-9_-]+$",
+                                       description="Unique snake_case ID, e.g. market_analyst")
+    name:                  str = Field(..., min_length=1, max_length=60)
+    role:                  str = Field(default="custom")
+    model:                 str = Field(..., min_length=1)
+    description:           str = Field(default="")
+    emoji:                 str = Field(default="🤖")
+    personality:           str = Field(default="")
+    system_prompt:         str = Field(default="")
+    temperature:           float = Field(default=1.0, ge=0.0, le=2.0)
+    thinking_enabled:      bool = Field(default=False)
+    thinking_budget_tokens: int = Field(default=4000, ge=0, le=32000)
+    memory_enabled:        bool = Field(default=True)
+    tools:                 list[str] = Field(default_factory=list)
+
+
+class AgentBuilderMeta(BaseModel):
+    """Static metadata for the agent builder UI."""
+    available_tools:       dict[str, Any]
+    role_options:          list[dict[str, str]]
+    personality_templates: dict[str, Any]

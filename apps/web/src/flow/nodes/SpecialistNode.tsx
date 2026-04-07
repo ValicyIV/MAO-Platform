@@ -44,6 +44,7 @@ export const SpecialistNode = memo(({ id, data }: NodeProps<SpecialistNodeData>)
         {/* Header row */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
+            {data.emoji && <span className="text-lg shrink-0">{data.emoji}</span>}
             <StatusBadge status={status} size="sm" />
             <span className="font-medium text-sm text-neutral-200 truncate">
               {data.agentName}

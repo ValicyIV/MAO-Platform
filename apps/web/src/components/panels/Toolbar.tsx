@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ViewMode } from "@/App";
 import { useAgentConnection } from "@/hooks";
+import { AgentConfigPanel } from "@/components/panels/AgentConfigPanel";
 import { useActiveStreamCount } from "@/stores/selectors/streamingSelectors";
 import { useMemoryGraphStore } from "@/stores/memoryGraphStore";
 import { useGraphStore } from "@/stores/graphStore";
@@ -16,6 +17,7 @@ interface ToolbarProps {
 
 export function Toolbar({ viewMode, onViewModeChange, workflowId, onWorkflowStart }: ToolbarProps) {
   const [task, setTask] = useState("");
+  const [showConfig, setShowConfig] = useState(false);
   const { connected, connect } = useAgentConnection();
   const activeStreams = useActiveStreamCount();
   const conflictCount = useMemoryGraphStore((s) => s.conflictCount);
@@ -71,6 +73,15 @@ export function Toolbar({ viewMode, onViewModeChange, workflowId, onWorkflowStar
         className="flex-1 max-w-xl text-sm bg-neutral-900 border border-neutral-700 rounded-md px-3 py-1.5 text-neutral-200 placeholder-neutral-600 focus:outline-none focus:border-blue-500"
       />
 
+      {/* Config button */}
+      <button
+        onClick={() => setShowConfig(true)}
+        className="px-3 py-1.5 rounded-md text-sm border border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:border-neutral-500 transition-colors"
+        title="Configure agent models"
+      >
+        ⚙ Agents
+      </button>
+
       {/* Run button */}
       <button
         onClick={handleRun}
@@ -101,6 +112,9 @@ export function Toolbar({ viewMode, onViewModeChange, workflowId, onWorkflowStar
       >
         Clear
       </button>
-    </div>
+      {/* Agent config panel */}
+      {showConfig && (
+        <AgentConfigPanel onClose={() => setShowConfig(false)} />
+      )}
   );
 }

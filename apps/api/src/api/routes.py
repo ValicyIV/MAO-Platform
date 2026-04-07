@@ -13,6 +13,10 @@ import structlog
 from fastapi import APIRouter, HTTPException, Query
 
 from src.api.schemas import (
+    AgentConfigFull,
+    AgentConfigPatch,
+    AgentCreateRequest,
+    AgentBuilderMeta,
     AgentInfo,
     ErrorResponse,
     HealthResponse,
@@ -86,19 +90,145 @@ async def cancel_workflow(workflow_id: str) -> dict[str, str]:
 
 @router.get("/agents", response_model=list[AgentInfo], summary="List available agents")
 async def list_agents() -> list[AgentInfo]:
-    from src.agents.registry import AGENTS
+    from src.agents.registry import get_agent_configs
     return [
-        AgentInfo(
-            id=name,
-            name=cfg.name,
-            role=cfg.role,
-            model=cfg.model,
-            tools=cfg.tools,
-            description=cfg.description,
-        )
-        for name, cfg in AGENTS.items()
+        AgentInfo(id=name, name=cfg.name, role=cfg.role,
+                  model=cfg.model, tools=[], description=cfg.description)
+        for name, cfg in get_agent_configs().items()
     ]
 
+
+
+def _cfg_to_full(agent_id: str, cfg) -> "AgentConfigFull":
+    from src.agents.model_router import model_display_name, model_badge_color, detect_provider
+    return AgentConfigFull(
+        id=agent_id,
+        name=cfg.name,
+        role=cfg.role,
+        model=cfg.model,
+        description=cfg.description,
+        emoji=getattr(cfg, "emoji", "🤖"),
+        personality=getattr(cfg, "personality", ""),
+        system_prompt=getattr(cfg, "system_prompt", ""),
+        temperature=cfg.temperature,
+        thinking_enabled=cfg.thinking_enabled,
+        thinking_budget_tokens=cfg.thinking_budget_tokens,
+        memory_enabled=cfg.memory_enabled,
+        is_custom=getattr(cfg, "is_custom", False),
+        tools=[t.name if hasattr(t, "name") else str(t) for t in (cfg.tools or [])],
+        provider=detect_provider(cfg.model).value,
+        display_name=model_display_name(cfg.model),
+        badge_color=model_badge_color(cfg.model),
+    )
+
+@router.get(
+    "/agents/config",
+    response_model=list[AgentConfigFull],
+    summary="Get full configuration for all agents",
+)
+async def get_all_agent_configs() -> list[AgentConfigFull]:
+    """Returns resolved configs (code defaults merged with env + file overrides)."""
+    from src.agents.registry import get_agent_configs
+    return [_cfg_to_full(name, cfg) for name, cfg in get_agent_configs().items()]
+
+
+@router.get(
+    "/agents/config/{agent_name}",
+    response_model=AgentConfigFull,
+    summary="Get configuration for one agent",
+)
+async def get_agent_config(agent_name: str) -> AgentConfigFull:
+    from src.agents.registry import get_agent_configs
+    configs = get_agent_configs()
+    if agent_name not in configs:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
+    return _cfg_to_full(agent_name, configs[agent_name])
+
+
+@router.patch(
+    "/agents/config/{agent_name}",
+    response_model=AgentConfigFull,
+    summary="Update one agent's configuration at runtime",
+)
+async def patch_agent_config(agent_name: str, patch: AgentConfigPatch) -> AgentConfigFull:
+    """
+    Partially update an agent's config. Changes are persisted to data/agents.json
+    and take effect on the next workflow execution (agents are rebuilt automatically).
+
+    Only the fields included in the request body are changed.
+    """
+    from src.agents.registry import update_agent_config
+
+    # Validate agent name
+    from src.agents.registry import get_agent_configs
+    if agent_name not in get_agent_configs():
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
+
+    update_patch = patch.model_dump(exclude_none=True)
+    if not update_patch:
+        raise HTTPException(status_code=422, detail="No fields to update")
+
+    cfg = update_agent_config(agent_name, update_patch)
+    log.info("agent_config.patched", agent=agent_name, patch=update_patch)
+    return _cfg_to_full(agent_name, cfg)
+
+
+@router.post(
+    "/agents/config/{agent_name}/reset",
+    response_model=AgentConfigFull,
+    summary="Reset one agent to its default configuration",
+)
+async def reset_agent_config_endpoint(agent_name: str) -> AgentConfigFull:
+    """Remove all file overrides for this agent, reverting to env/code defaults."""
+    from src.agents.registry import reset_agent_config, get_agent_configs
+
+    if agent_name not in get_agent_configs():
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
+
+    cfg = reset_agent_config(agent_name)
+    return _cfg_to_full(agent_name, cfg)
+
+
+
+
+# ── Agent builder metadata ────────────────────────────────────────────────────
+
+@router.get("/agents/builder/meta", response_model=AgentBuilderMeta, summary="Metadata for the agent builder UI")
+async def get_builder_meta() -> AgentBuilderMeta:
+    from src.agents.registry import AVAILABLE_TOOLS, ROLE_OPTIONS, PERSONALITY_TEMPLATES
+    return AgentBuilderMeta(
+        available_tools=AVAILABLE_TOOLS,
+        role_options=ROLE_OPTIONS,
+        personality_templates=PERSONALITY_TEMPLATES,
+    )
+
+
+# ── Create custom agent ───────────────────────────────────────────────────────
+
+@router.post("/agents/config", response_model=AgentConfigFull, status_code=201,
+             summary="Create a new custom agent")
+async def create_agent(body: AgentCreateRequest) -> AgentConfigFull:
+    from src.agents.registry import create_agent as _create
+    cfg_dict = body.model_dump(exclude={"id"})
+    try:
+        cfg = _create(body.id, cfg_dict)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    log.info("agent.created id=%s model=%s", body.id, body.model)
+    return _cfg_to_full(body.id, cfg)
+
+
+# ── Delete custom agent ───────────────────────────────────────────────────────
+
+@router.delete("/agents/config/{agent_name}", status_code=204,
+               summary="Delete a custom agent (built-ins cannot be deleted)")
+async def delete_agent(agent_name: str) -> None:
+    from src.agents.registry import delete_agent as _delete
+    try:
+        _delete(agent_name)
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    log.info("agent.deleted id=%s", agent_name)
 
 # ── Memory ────────────────────────────────────────────────────────────────────
 
