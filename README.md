@@ -14,21 +14,22 @@ Browser (React Flow)
   └── Memory Graph      — Shared knowledge graph (entities, relationships, conflicts)
           ↕ WebSocket (AG-UI events)
 FastAPI backend
-  ├── LangGraph         — Multi-agent orchestration (supervisor + 4 specialists)
-  ├── Anthropic Claude  — Extended thinking + streaming
-  ├── Memory stack      — Hot cache + episode logs + Kuzu knowledge graph (Mem0g)
-  └── Langfuse + OTEL   — Full observability
+  ├── LangGraph         — Multi-agent orchestration (supervisor + 5 specialists)
+  ├── Model router      — Anthropic Claude, OpenRouter (200+ models), Ollama (local)
+  ├── Memory stack      — Hot cache + episode logs + Kuzu knowledge graph
+  ├── Langfuse + OTEL   — Full observability
+  └── MCP               — Tool servers (GitHub, Postgres, custom)
 ```
 
 ## Quick start
 
 ### Prerequisites
 
-- Python 3.12+
-- Node 20+
-- pnpm 9+
-- Docker + Docker Compose
-- [uv](https://github.com/astral-sh/uv) (Python package manager)
+- **Docker + Docker Compose** (required)
+- At least one LLM provider:
+  - [Anthropic API key](https://console.anthropic.com/) — required for `claude-*` models and extended thinking
+  - [OpenRouter API key](https://openrouter.ai/keys) — pay-per-token access to 200+ models
+  - [Ollama](https://ollama.ai) — free local inference (llama3, mistral, phi-3, etc.)
 
 ### 1. Clone and configure
 
@@ -36,23 +37,57 @@ FastAPI backend
 git clone <repo>
 cd mao-platform
 cp .env.example .env
-# Edit .env — at minimum set ANTHROPIC_API_KEY
 ```
 
-### 2. Start everything
+Edit `.env` and set at least one LLM provider key:
+
+```bash
+# Option A: Anthropic (required for claude-* models + extended thinking)
+ANTHROPIC_API_KEY=sk-ant-api03-...
+
+# Option B: OpenRouter (200+ models, pay-per-token)
+OPENROUTER_API_KEY=sk-or-v1-...
+
+# Option C: Ollama (free, local — install from https://ollama.ai)
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
+All three providers can coexist. The model ID convention determines routing:
+- `claude-*` → Anthropic
+- `ollama/<name>` → Ollama (e.g. `ollama/llama3.2`)
+- `<org>/<model>` → OpenRouter (e.g. `openai/gpt-4o`)
+
+### 2. Start everything (Docker)
+
+**Development** (hot reload for API + frontend):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+```
+
+**Production** (built images, nginx):
+
+```bash
+docker compose up
+```
+
+**Alternative — native dev** (no Docker for API/frontend, only infra):
 
 ```bash
 chmod +x scripts/dev.sh
 ./scripts/dev.sh
 ```
 
-This starts:
-| Service   | URL                           |
-|-----------|-------------------------------|
-| Frontend  | http://localhost:5173         |
-| API       | http://localhost:8000         |
-| API docs  | http://localhost:8000/api/docs|
-| Langfuse  | http://localhost:3001         |
+### Services
+
+| Service   | URL                            | Notes                          |
+|-----------|--------------------------------|--------------------------------|
+| Frontend  | http://localhost:5173          | React + React Flow             |
+| API       | http://localhost:8000          | FastAPI + LangGraph            |
+| API docs  | http://localhost:8000/api/docs | Swagger UI                     |
+| Langfuse  | http://localhost:3001          | Observability dashboard        |
+| Postgres  | `localhost:5432`               | LangGraph checkpointer         |
+| Redis     | `localhost:6379`               | WebSocket session state        |
 
 ### 3. Run a workflow
 
@@ -64,16 +99,64 @@ Switch to **Memory** view to see the Obsidian-style knowledge graph populated as
 
 ---
 
+## Docker Compose files
+
+| File | Purpose |
+|------|---------|
+| `docker-compose.yml` | Production stack — all services with built images |
+| `docker-compose.dev.yml` | Dev overrides — hot reload via volume mounts (API: uvicorn `--reload`, Web: Vite HMR) |
+
+**Useful commands:**
+
+```bash
+# Start dev mode (foreground with logs)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+# Start in background
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+# View API logs
+docker compose -f docker-compose.yml -f docker-compose.dev.yml logs api -f
+
+# Rebuild API after dependency changes
+docker compose -f docker-compose.yml -f docker-compose.dev.yml build api --no-cache
+
+# Tear down everything (including volumes)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down --volumes --remove-orphans
+```
+
+---
+
 ## Project structure
 
 ```
 mao-platform/
 ├── apps/
-│   ├── api/          # Python FastAPI + LangGraph backend
-│   └── web/          # React + React Flow frontend
+│   ├── api/                # Python FastAPI + LangGraph backend
+│   │   ├── src/
+│   │   │   ├── agents/     # Agent registry, base factory
+│   │   │   ├── api/        # REST routes, middleware, schemas
+│   │   │   ├── config/     # Settings, prompts
+│   │   │   ├── graph/      # LangGraph state machine, nodes, edges, scheduler
+│   │   │   ├── persistence/# Memory store, knowledge graph, consolidator
+│   │   │   ├── streaming/  # WebSocket, SSE, AG-UI event mapper
+│   │   │   └── tools/      # Agent tools (search, code, documents, MCP)
+│   │   ├── Dockerfile
+│   │   └── pyproject.toml
+│   └── web/                # React + React Flow frontend
+│       └── src/
+│           ├── services/   # WebSocketService, AGUIEventRouter
+│           ├── stores/     # Zustand stores (graph, streaming, agentStatus, memoryGraph)
+│           └── flow/       # React Flow nodes and canvas components
 ├── packages/
-│   └── shared-types/ # TypeScript types shared across frontend + API client
-└── scripts/          # dev.sh, generate-types.sh
+│   └── shared-types/       # TypeScript types shared across frontend + API client
+├── scripts/                # dev.sh
+├── data/                   # Persistent data (gitignored except .gitkeep)
+│   ├── agent-memory/       # Hot cache + episode logs
+│   └── kuzu/               # Kuzu knowledge graph DB
+├── docker-compose.yml      # Production stack
+├── docker-compose.dev.yml  # Dev overrides (hot reload)
+└── .env.example            # Environment variable template
 ```
 
 ## Key files
@@ -81,14 +164,29 @@ mao-platform/
 | File | Role |
 |------|------|
 | `apps/api/src/main.py` | FastAPI entry point + lifespan |
+| `apps/api/src/config/settings.py` | Pydantic settings (env vars, validation) |
+| `apps/api/src/config/prompts.py` | All agent system prompts (cache boundary pattern) |
 | `apps/api/src/graph/graph.py` | LangGraph StateGraph compilation |
-| `apps/api/src/streaming/event_mapper.py` | LangGraph → AG-UI bridge |
+| `apps/api/src/graph/state.py` | `OrchestratorState` TypedDict with reducers |
+| `apps/api/src/graph/supervisor.py` | Orchestrator node (routes tasks to specialists) |
+| `apps/api/src/graph/nodes.py` | Specialist agent node wrapper |
+| `apps/api/src/graph/edges.py` | Conditional routing + verification trigger |
+| `apps/api/src/graph/scheduler.py` | Heartbeat scheduler (consolidation, pruning) |
+| `apps/api/src/agents/registry.py` | Agent configs + build (model routing, tools) |
+| `apps/api/src/agents/base.py` | `create_specialist_agent` factory |
+| `apps/api/src/streaming/event_mapper.py` | LangGraph → AG-UI event bridge |
 | `apps/api/src/streaming/websocket.py` | WebSocket server + ConnectionManager |
-| `apps/api/src/persistence/knowledge_graph.py` | Obsidian-style Kuzu KG |
+| `apps/api/src/streaming/sse.py` | SSE fallback transport |
+| `apps/api/src/persistence/knowledge_graph.py` | Kuzu knowledge graph (entities, relations) |
+| `apps/api/src/persistence/memory_store.py` | Hot cache (Tier 1) + episode logs (Tier 2) |
+| `apps/api/src/persistence/memory_retriever.py` | Context injection from all memory tiers |
+| `apps/api/src/persistence/memory_consolidator.py` | Background consolidation (facts, KG, procedures) |
+| `apps/web/src/services/WebSocketService.ts` | WS connection lifecycle + reconnect backoff |
 | `apps/web/src/services/AGUIEventRouter.ts` | Event → store dispatcher (RAF buffered) |
-| `apps/web/src/services/PretextService.ts` | DOM-free text measurement |
-| `apps/web/src/flow/nodes/ThinkingStreamNode.tsx` | Live CoT streaming node |
-| `apps/web/src/stores/streamingStore.ts` | Isolated streaming state |
+| `apps/web/src/stores/graphStore.ts` | Topology state (nodes, edges, expand/collapse) |
+| `apps/web/src/stores/streamingStore.ts` | Isolated streaming text state (60fps cap) |
+| `apps/web/src/stores/agentStatusStore.ts` | Agent lifecycle state |
+| `apps/web/src/stores/memoryGraphStore.ts` | Memory graph entities + relationships |
 
 ## Architectural patterns
 
@@ -110,6 +208,19 @@ mao-platform/
 | 14 | Cross-agent knowledge graph | `persistence/knowledge_graph.py` |
 | 15 | Memory-augmented context injection | `persistence/memory_retriever.py` |
 | 16 | Memory Graph UI view | `flow/memory/MemoryGraphCanvas.tsx` |
+
+## Environment variables
+
+See `.env.example` for the full list. Key groups:
+
+| Group | Variables | Required |
+|-------|-----------|----------|
+| **LLM Providers** | `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `OLLAMA_BASE_URL` | At least one |
+| **Langfuse** | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | No (observability) |
+| **Database** | `DATABASE_URL`, `REDIS_URL` | Auto-configured in Docker |
+| **Memory** | `KUZU_DB_PATH`, `MEMORY_*_TOKENS`, `MEMORY_GRAPH_HOPS` | No (has defaults) |
+| **Agent** | `DEFAULT_MODEL`, `HEARTBEAT_INTERVAL`, `VERIFICATION_THRESHOLD` | No (has defaults) |
+| **Features** | `EXTENDED_THINKING_ENABLED`, `A2A_ENABLED`, `KAIROS_DAEMON_ENABLED` | No (has defaults) |
 
 ## Development phases
 

@@ -75,7 +75,7 @@ services:
       LANGFUSE_HOST: http://langfuse:3001
       DATABASE_URL: postgresql+asyncpg://mao:mao@postgres:5432/mao
       REDIS_URL: redis://redis:6379/0
-      KUZU_DB_PATH: /app/data/kuzu
+      KUZU_DB_PATH: /app/data/kuzu/mao.db
       MEMORY_GRAPH_ENABLED: "true"
       CORS_ORIGINS: '["http://localhost:5173"]'
     volumes:

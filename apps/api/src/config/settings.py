@@ -81,8 +81,8 @@ class Settings(BaseSettings):
 
     # ── Memory system ─────────────────────────────────────────────────────────
     kuzu_db_path: str = Field(
-        default="./data/kuzu",
-        description="Path to Kuzu embedded graph DB directory",
+        default="./data/kuzu/mao.db",
+        description="Path to Kuzu embedded graph DB file",
     )
     memory_graph_enabled: bool = Field(default=True)
 

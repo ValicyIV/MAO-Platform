@@ -7,7 +7,7 @@ RUN corepack enable pnpm
 WORKDIR /workspace
 
 # Copy workspace manifests first for layer caching
-COPY pnpm-workspace.yaml package.json turbo.json ./
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json ./
 COPY packages/config/tsconfig.base.json ./packages/config/
 COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/shared-types/tsconfig.json ./packages/shared-types/
@@ -21,7 +21,7 @@ RUN pnpm install --frozen-lockfile
 COPY apps/web/ ./apps/web/
 
 # Build
-RUN pnpm --filter @mao/web build
+RUN pnpm --filter @mao/web exec vite build
 
 # ── Stage 2: serve ─────────────────────────────────────────────────────────────
 FROM nginx:1.27-alpine AS runner
@@ -34,7 +34,9 @@ COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
+RUN apk add --no-cache curl
+
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s \
-  CMD wget -qO- http://localhost/health || exit 1
+  CMD curl -sf http://localhost/health || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

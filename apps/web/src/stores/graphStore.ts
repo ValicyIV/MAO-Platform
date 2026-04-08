@@ -89,12 +89,20 @@ export const useGraphStore = create<GraphStore>()(
 
     onNodesChange: (changes) =>
       set((s) => {
-        s.nodes = applyNodeChanges(changes, s.nodes) as Node<NodeDataUnion>[];
+        const relevantChanges = changes.filter(
+          (change) => change.type === "add" || change.type === "remove" || change.type === "replace"
+        );
+        if (relevantChanges.length === 0) return;
+        s.nodes = applyNodeChanges(relevantChanges, s.nodes) as Node<NodeDataUnion>[];
       }),
 
     onEdgesChange: (changes) =>
       set((s) => {
-        s.edges = applyEdgeChanges(changes, s.edges);
+        const relevantChanges = changes.filter(
+          (change) => change.type === "add" || change.type === "remove" || change.type === "replace"
+        );
+        if (relevantChanges.length === 0) return;
+        s.edges = applyEdgeChanges(relevantChanges, s.edges);
       }),
 
     toggleExpand: (id) =>

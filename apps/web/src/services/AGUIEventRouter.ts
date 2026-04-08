@@ -5,7 +5,7 @@
 // so token updates are batched once per animation frame (max 60/sec),
 // not per-token (up to 100/sec per agent × N agents).
 
-import type { ServerMessage, AgentEvent, CustomEvent } from "@mao/shared-types";
+import type { ServerMessage, AgentEvent, CustomEvent, MAOEventPayloadMap } from "@mao/shared-types";
 import { AgentStatus } from "@mao/shared-types";
 import { useGraphStore } from "@/stores/graphStore";
 import { useStreamingStore } from "@/stores/streamingStore";
@@ -86,7 +86,7 @@ export class AGUIEventRouter {
         break;
 
       case "STEP_FINISHED":
-        statusStore.setProgress(event.agentId, 90, null);
+        statusStore.setProgress(event.agentId, 90, undefined);
         break;
 
       // ── Text streaming — buffer, don't dispatch per token ────────────────────
@@ -98,7 +98,7 @@ export class AGUIEventRouter {
           event.isThinking,
           320 // default node width — updated by ThinkingStreamNode on mount
         );
-        this._ensureThinkingNode(event.nodeId, event.stepId ?? event.agentId);
+        this._ensureThinkingNode(event.nodeId, event.agentId);
         break;
 
       case "TEXT_MESSAGE_CONTENT":
@@ -141,36 +141,41 @@ export class AGUIEventRouter {
   }
 
   private _handleCustom(event: CustomEvent): void {
-    const { customType, payload } = event;
-    const streamingStore = useStreamingStore.getState();
     const memoryStore = useMemoryGraphStore.getState();
 
-    switch (customType) {
-      case "thinking_delta":
+    switch (event.customType) {
+      case "thinking_delta": {
+        const p = event.payload as MAOEventPayloadMap["thinking_delta"];
         // Thinking tokens go through the same RAF buffer
-        this._bufferToken(payload.nodeId, payload.delta);
+        this._bufferToken(p.nodeId, p.delta);
         break;
+      }
 
       case "agent_handoff": {
+        const p = event.payload as MAOEventPayloadMap["agent_handoff"];
         const graphStore = useGraphStore.getState();
         graphStore.addEdge({
-          id: `handoff-${payload.fromAgentId}-${payload.toAgentId}-${Date.now()}`,
-          source: payload.fromAgentId,
-          target: payload.toAgentId,
+          id: `handoff-${p.fromAgentId}-${p.toAgentId}-${Date.now()}`,
+          source: p.fromAgentId,
+          target: p.toAgentId,
           type: "handoff",
           animated: true,
-          label: payload.reason?.slice(0, 40),
+          label: p.reason?.slice(0, 40),
         });
         break;
       }
 
-      case "memory_update":
-        memoryStore.applyMemoryDelta(payload.delta);
+      case "memory_update": {
+        const p = event.payload as MAOEventPayloadMap["memory_update"];
+        memoryStore.applyMemoryDelta(p.delta);
         break;
+      }
 
-      case "conflict_detected":
-        console.warn("[Memory] conflict detected", payload.entityAId, "vs", payload.entityBId);
+      case "conflict_detected": {
+        const p = event.payload as MAOEventPayloadMap["conflict_detected"];
+        console.warn("[Memory] conflict detected", p.entityAId, "vs", p.entityBId);
         break;
+      }
 
       case "heartbeat":
         // Could update a connection status indicator

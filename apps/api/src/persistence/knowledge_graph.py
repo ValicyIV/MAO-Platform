@@ -141,7 +141,7 @@ class KnowledgeGraph:
     async def init(self) -> None:
         from src.config.settings import settings
         loop = asyncio.get_event_loop()
-        import os; os.makedirs(settings.kuzu_db_path, exist_ok=True)
+        import os; os.makedirs(os.path.dirname(settings.kuzu_db_path) or ".", exist_ok=True)
         self._db   = await loop.run_in_executor(None, kuzu.Database, settings.kuzu_db_path)
         self._conn = await loop.run_in_executor(None, kuzu.Connection, self._db)
         await loop.run_in_executor(None, self._create_schema)
