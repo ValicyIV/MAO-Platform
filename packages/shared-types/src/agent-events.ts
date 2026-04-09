@@ -4,6 +4,7 @@
 // All 17 AG-UI types are represented; custom MAO types use the CUSTOM wrapper.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import type { AgentStatus } from "./agent-types.js";
 import type { MemoryDelta, StepType, ToolCallNodeData } from "./graph-types.js";
 
 // ── Core AG-UI event types ────────────────────────────────────────────────────

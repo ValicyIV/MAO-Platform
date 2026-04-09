@@ -18,7 +18,7 @@ interface ToolbarProps {
 export function Toolbar({ viewMode, onViewModeChange, workflowId, onWorkflowStart }: ToolbarProps) {
   const [task, setTask] = useState("");
   const [showConfig, setShowConfig] = useState(false);
-  const { connect } = useAgentConnection();
+  const { connected, connect } = useAgentConnection();
   const activeStreams = useActiveStreamCount();
   const conflictCount = useMemoryGraphStore((s) => s.conflictCount);
   const resetGraph = useGraphStore((s) => s.reset);
@@ -116,6 +116,5 @@ export function Toolbar({ viewMode, onViewModeChange, workflowId, onWorkflowStar
       {showConfig && (
         <AgentConfigPanel onClose={() => setShowConfig(false)} />
       )}
-    </div>
   );
 }

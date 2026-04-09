@@ -79,10 +79,52 @@ class Settings(BaseSettings):
                 return [v]
         return v
 
+    @field_validator("anthropic_api_key", "openrouter_api_key", mode="before")
+    @classmethod
+    def normalize_provider_key(cls, v: str) -> str:
+        if not isinstance(v, str):
+            return v
+        cleaned = v.strip().strip('"').strip("'")
+        if cleaned.endswith("...") or cleaned.lower() in {"", "none", "null", "your_api_key_here"}:
+            return ""
+        return cleaned
+
+    @property
+    def has_anthropic_api_key(self) -> bool:
+        return bool(self.anthropic_api_key)
+
+    @property
+    def has_openrouter_api_key(self) -> bool:
+        return bool(self.openrouter_api_key)
+
+    def resolve_model_for_available_providers(
+        self,
+        model_id: str,
+        *,
+        anthropic_fallback: str,
+        openrouter_fallback: str,
+        ollama_fallback: str = "ollama/llama3.2",
+    ) -> str:
+        if model_id.startswith("claude-"):
+            if self.has_anthropic_api_key:
+                return model_id
+            if self.has_openrouter_api_key:
+                return openrouter_fallback
+            return ollama_fallback
+
+        if model_id.startswith("ollama/") or model_id.startswith("ollama:"):
+            return model_id
+
+        if self.has_openrouter_api_key:
+            return model_id
+        if self.has_anthropic_api_key:
+            return anthropic_fallback
+        return ollama_fallback
+
     # ── Memory system ─────────────────────────────────────────────────────────
     kuzu_db_path: str = Field(
-        default="./data/kuzu/mao.db",
-        description="Path to Kuzu embedded graph DB file",
+        default="./data/kuzu",
+        description="Path to Kuzu embedded graph DB directory",
     )
     memory_graph_enabled: bool = Field(default=True)
 
@@ -157,6 +199,20 @@ class Settings(BaseSettings):
                 f"Total memory token budget ({total}) exceeds 8000. "
                 "Reduce one or more MEMORY_*_TOKENS settings."
             )
+        return self
+
+    @model_validator(mode="after")
+    def normalize_provider_backed_models(self) -> "Settings":
+        self.default_model = self.resolve_model_for_available_providers(
+            self.default_model,
+            anthropic_fallback="claude-sonnet-4-6",
+            openrouter_fallback="openai/gpt-4o-mini",
+        )
+        self.extraction_model = self.resolve_model_for_available_providers(
+            self.extraction_model,
+            anthropic_fallback="claude-haiku-4-5",
+            openrouter_fallback="openai/gpt-4o-mini",
+        )
         return self
 
 

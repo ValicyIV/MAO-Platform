@@ -135,45 +135,55 @@ PERSONALITY_TEMPLATES: dict[str, dict[str, str]] = {
 # ── Layer 1: Code defaults ────────────────────────────────────────────────────
 
 def _code_defaults() -> dict[str, dict[str, Any]]:
+    supervisor_model = settings.resolve_model_for_available_providers(
+        "claude-opus-4-6",
+        anthropic_fallback="claude-opus-4-6",
+        openrouter_fallback="openai/gpt-4o-mini",
+    )
+    specialist_model = settings.resolve_model_for_available_providers(
+        "claude-sonnet-4-6",
+        anthropic_fallback="claude-sonnet-4-6",
+        openrouter_fallback="openai/gpt-4o-mini",
+    )
     return {
         "supervisor": {
             "name": "Supervisor", "role": "orchestrator", "emoji": "🧭",
-            "model": "claude-opus-4-6",
+            "model": supervisor_model,
             "description": "Plans and delegates tasks to specialist agents.",
             "temperature": 1.0, "thinking_enabled": True,
             "thinking_budget_tokens": 10000, "memory_enabled": True,
         },
         "research": {
             "name": "Research Agent", "role": "research", "emoji": "🔍",
-            "model": "claude-sonnet-4-6",
+            "model": specialist_model,
             "description": "Searches the web and synthesises research findings.",
             "temperature": 1.0, "thinking_enabled": True,
             "thinking_budget_tokens": settings.thinking_budget_tokens, "memory_enabled": True,
         },
         "code": {
             "name": "Code Agent", "role": "code", "emoji": "💻",
-            "model": "claude-sonnet-4-6",
+            "model": specialist_model,
             "description": "Writes, executes, and debugs code.",
             "temperature": 1.0, "thinking_enabled": True,
             "thinking_budget_tokens": settings.thinking_budget_tokens, "memory_enabled": True,
         },
         "data": {
             "name": "Data Agent", "role": "data", "emoji": "📊",
-            "model": "claude-sonnet-4-6",
+            "model": specialist_model,
             "description": "Analyses data and generates visualisations.",
             "temperature": 1.0, "thinking_enabled": True,
             "thinking_budget_tokens": settings.thinking_budget_tokens, "memory_enabled": True,
         },
         "writer": {
             "name": "Writer Agent", "role": "writer", "emoji": "✍️",
-            "model": "claude-sonnet-4-6",
+            "model": specialist_model,
             "description": "Composes and edits documents and prose.",
             "temperature": 1.0, "thinking_enabled": False,
             "thinking_budget_tokens": 0, "memory_enabled": True,
         },
         "verifier": {
             "name": "Verifier", "role": "verifier", "emoji": "✅",
-            "model": "claude-sonnet-4-6",
+            "model": specialist_model,
             "description": "Adversarial reviewer — finds errors, not confirmations.",
             "temperature": 1.0, "thinking_enabled": True,
             "thinking_budget_tokens": 4000, "memory_enabled": False,

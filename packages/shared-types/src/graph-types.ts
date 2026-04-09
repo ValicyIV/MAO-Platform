@@ -54,7 +54,6 @@ export enum MemoryEntityType {
 // ── Level 1: Orchestrator ─────────────────────────────────────────────────────
 
 export interface OrchestratorNodeData {
-  [key: string]: unknown;
   level: NodeLevel.Orchestrator;
   workflowId: string;
   workflowName: string;
@@ -68,7 +67,6 @@ export interface OrchestratorNodeData {
 // ── Level 2: Specialist Agent ─────────────────────────────────────────────────
 
 export interface SpecialistNodeData {
-  [key: string]: unknown;
   level: NodeLevel.Specialist;
   agentId: string;
   agentName: string;
@@ -84,7 +82,6 @@ export interface SpecialistNodeData {
 // ── Level 3: Execution Step ───────────────────────────────────────────────────
 
 export interface ExecutionStepNodeData {
-  [key: string]: unknown;
   level: NodeLevel.ExecutionStep;
   stepId: string;
   agentId: string;
@@ -99,7 +96,6 @@ export interface ExecutionStepNodeData {
 }
 
 export interface ToolCallNodeData {
-  [key: string]: unknown;
   level: NodeLevel.ExecutionStep;
   stepId: string;
   agentId: string;
@@ -116,7 +112,6 @@ export interface ToolCallNodeData {
 // ── Level 4: Thinking Stream ──────────────────────────────────────────────────
 
 export interface ThinkingStreamNodeData {
-  [key: string]: unknown;
   level: NodeLevel.ThinkingStream;
   stepId: string;
   agentId: string;
@@ -129,7 +124,6 @@ export interface ThinkingStreamNodeData {
 // ── Memory Graph Nodes ────────────────────────────────────────────────────────
 
 export interface MemoryNodeData {
-  [key: string]: unknown;
   entityId: string;
   entityType: MemoryEntityType;
   label: string;
@@ -142,7 +136,6 @@ export interface MemoryNodeData {
 }
 
 export interface MemoryEdgeData {
-  [key: string]: unknown;
   relationship: MemoryRelationship;
   confidence: number;
   timestamp: number;

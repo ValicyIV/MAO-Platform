@@ -71,12 +71,12 @@ async def supervisor_node(
     but can be changed to any OpenRouter or Ollama model by updating registry.py.
     """
     from src.agents.model_router import get_chat_model
-    from src.agents.registry import AGENTS
+    from src.agents.registry import get_agent_configs
     from src.config.prompts import get_prompt
     from src.persistence.memory_retriever import get_context
 
     # Get supervisor model from registry (respects any model ID format)
-    supervisor_cfg = AGENTS.get("supervisor")
+    supervisor_cfg = get_agent_configs().get("supervisor")
     model_id = supervisor_cfg.model if supervisor_cfg else settings.default_model
 
     llm = get_chat_model(

@@ -1,13 +1,10 @@
 // hooks/useAutoLayout.ts — ELK compound graph layout
 // Runs on layoutVersion changes. Debounced 50ms to batch rapid updates.
 // Only re-layouts on topology changes, NOT on streaming text updates.
-//
-// IMPORTANT: Updates positions directly in the graphStore instead of using
-// useReactFlow().setNodes to avoid an infinite re-render loop.
-// setNodes triggers onNodesChange → graphStore update → new array ref → re-render → loop.
 
 import { useEffect, useRef } from "react";
 import ELK, { type ElkNode } from "elkjs/lib/elk.bundled.js";
+import { useReactFlow } from "@xyflow/react";
 import { useGraphStore } from "@/stores/graphStore";
 
 const elk = new ELK();
@@ -23,6 +20,7 @@ const ELK_OPTIONS: Record<string, string> = {
 };
 
 export function useAutoLayout(layoutVersion: number) {
+  const { setNodes } = useReactFlow();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -62,38 +60,25 @@ export function useAutoLayout(layoutVersion: number) {
 
         const layout = await elk.layout(elkGraph);
 
-        // Build a position map from the ELK result
-        const positionMap = new Map<string, { x: number; y: number; width?: number; height?: number }>();
-        for (const child of layout.children ?? []) {
-          if (child.x !== undefined && child.y !== undefined) {
-            positionMap.set(child.id, { x: child.x, y: child.y, width: child.width, height: child.height });
-          }
-          for (const grandchild of child.children ?? []) {
-            if (grandchild.x !== undefined && grandchild.y !== undefined) {
-              positionMap.set(grandchild.id, { x: grandchild.x, y: grandchild.y, width: grandchild.width, height: grandchild.height });
-            }
-          }
-        }
+        setNodes((current) =>
+          current.map((node) => {
+            // Find position in ELK result
+            const found =
+              layout.children?.find((c) => c.id === node.id) ??
+              layout.children
+                ?.flatMap((c) => c.children ?? [])
+                .find((c) => c.id === node.id);
 
-        // Apply positions directly to graphStore — avoids the
-        // setNodes → onNodesChange → store update → re-render loop.
-        if (positionMap.size > 0) {
-          useGraphStore.setState((state) => ({
-            nodes: state.nodes.map((node) => {
-              const pos = positionMap.get(node.id);
-              if (pos) {
-                return {
-                  ...node,
-                  position: { x: pos.x, y: pos.y },
-                  ...(pos.width != null || pos.height != null
-                    ? { style: { ...node.style, width: pos.width, height: pos.height } }
-                    : {}),
-                };
-              }
-              return node;
-            }),
-          }));
-        }
+            if (found?.x !== undefined && found.y !== undefined) {
+              return {
+                ...node,
+                position: { x: found.x, y: found.y },
+                style: { ...node.style, width: found.width, height: found.height },
+              };
+            }
+            return node;
+          })
+        );
       } catch (e) {
         console.warn("[ELK] layout failed:", e);
       }
@@ -102,5 +87,5 @@ export function useAutoLayout(layoutVersion: number) {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [layoutVersion]);
+  }, [layoutVersion, setNodes]);
 }
