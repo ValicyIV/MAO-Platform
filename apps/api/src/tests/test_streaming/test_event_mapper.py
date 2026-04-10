@@ -31,10 +31,13 @@ def test_text_delta_produces_content_event(mapper):
         },
     }
     events = mapper.map(stream_part)
-    assert len(events) == 1
-    assert events[0]["type"] == "TEXT_MESSAGE_CONTENT"
-    assert events[0]["delta"] == "Hello"
-    assert events[0]["isThinking"] is False
+    # Mapper emits RUN_STARTED + TEXT_MESSAGE_START + TEXT_MESSAGE_CONTENT
+    assert len(events) == 3
+    assert events[0]["type"] == "RUN_STARTED"
+    assert events[1]["type"] == "TEXT_MESSAGE_START"
+    assert events[2]["type"] == "TEXT_MESSAGE_CONTENT"
+    assert events[2]["delta"] == "Hello"
+    assert events[2]["isThinking"] is False
 
 
 def test_thinking_delta_produces_custom_event(mapper):
@@ -47,10 +50,13 @@ def test_thinking_delta_produces_custom_event(mapper):
         },
     }
     events = mapper.map(stream_part)
-    assert len(events) == 1
-    assert events[0]["type"] == "CUSTOM"
-    assert events[0]["customType"] == "thinking_delta"
-    assert events[0]["payload"]["delta"] == "Let me reason..."
+    # Mapper emits RUN_STARTED + TEXT_MESSAGE_START + CUSTOM(thinking_delta)
+    assert len(events) == 3
+    assert events[0]["type"] == "RUN_STARTED"
+    assert events[1]["type"] == "TEXT_MESSAGE_START"
+    assert events[2]["type"] == "CUSTOM"
+    assert events[2]["customType"] == "thinking_delta"
+    assert events[2]["payload"]["delta"] == "Let me reason..."
 
 
 def test_empty_delta_produces_no_events(mapper):
@@ -60,6 +66,30 @@ def test_empty_delta_produces_no_events(mapper):
         "data": {"run_id": "run-empty", "chunk": {"content": ""}},
     }
     assert mapper.map(stream_part) == []
+
+
+def test_custom_step_events_are_normalized(mapper):
+    start = mapper.map({
+        "event": "custom",
+        "data": {"type": "step_started", "agent_id": "research", "step_name": "research invocation"},
+    })
+    assert [e["type"] for e in start] == ["RUN_STARTED", "STEP_STARTED"]
+
+    end = mapper.map({
+        "event": "custom",
+        "data": {"type": "step_finished", "agent_id": "research", "duration_ms": 12},
+    })
+    assert len(end) == 1
+    assert end[0]["type"] == "STEP_FINISHED"
+    assert end[0]["durationMs"] == 12
+
+    err = mapper.map({
+        "event": "custom",
+        "data": {"type": "agent_error", "agent_id": "research", "error": "boom"},
+    })
+    assert len(err) == 1
+    assert err[0]["type"] == "RUN_ERROR"
+    assert err[0]["error"] == "boom"
 
 
 # ── Tool calls ────────────────────────────────────────────────────────────────

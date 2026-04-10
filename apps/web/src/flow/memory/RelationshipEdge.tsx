@@ -44,14 +44,9 @@ export const RelationshipEdge = memo(({
         id={id}
         path={path}
         style={{ stroke: color, strokeWidth, opacity: 0.7 }}
-        markerEnd="url(#arrowhead)"
       />
       <EdgeLabelRenderer>
         <div
-          style={{
-            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
-            pointerEvents: "none",
-          }}
           className="absolute text-xs px-1 rounded bg-neutral-950/80"
           style={{
             color,

@@ -98,7 +98,7 @@ export class AGUIEventRouter {
           event.isThinking,
           320 // default node width — updated by ThinkingStreamNode on mount
         );
-        this._ensureThinkingNode(event.nodeId, event.stepId ?? event.agentId);
+        this._ensureThinkingNode(event.nodeId, event.stepId ?? event.agentId, event.agentId);
         break;
 
       case "TEXT_MESSAGE_CONTENT":
@@ -129,8 +129,7 @@ export class AGUIEventRouter {
         break;
 
       case "STATE_DELTA":
-        // JSON patch applied to graph state — handled by graphStore
-        console.debug("[Router] STATE_DELTA", event.delta.length, "ops");
+        graphStore.applyStateDelta(event.delta);
         break;
 
       // ── Custom MAO events ────────────────────────────────────────────────────
@@ -226,7 +225,7 @@ export class AGUIEventRouter {
         agentId,
         agentName,
         role: "research" as any,
-        model: (event as any).model ?? "unknown",
+        model: "unknown" as any,
         tools: [],
         status: AgentStatus.Running,
         tokenCount: 0,
@@ -272,7 +271,7 @@ export class AGUIEventRouter {
     });
   }
 
-  private _ensureThinkingNode(nodeId: string, parentStepId: string): void {
+  private _ensureThinkingNode(nodeId: string, parentStepId: string, agentId: string): void {
     const { nodes, addNode, addEdge } = useGraphStore.getState();
     if (nodes.find((n) => n.id === nodeId)) return;
 
@@ -285,7 +284,7 @@ export class AGUIEventRouter {
       data: {
         level: NodeLevel.ThinkingStream,
         stepId: parentStepId,
-        agentId: "",
+        agentId,
         isStreaming: true,
         textLength: 0,
         nodeWidth: 320,

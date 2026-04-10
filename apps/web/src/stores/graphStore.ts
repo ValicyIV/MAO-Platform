@@ -13,9 +13,11 @@ interface GraphStore {
   expandedIds: Set<string>;
   layoutVersion: number;
   selectedNodeId: string | null;
+  backendState: Record<string, unknown>;
 
   // Node mutations
   addNode: (node: Node<NodeDataUnion>) => void;
+  applyLayout: (layout: Record<string, { x: number; y: number; width?: number; height?: number }>) => void;
   updateNodeData: (id: string, data: Partial<NodeDataUnion>) => void;
   updateNodeDimensions: (id: string, dims: { width?: number; height?: number }) => void;
   removeNode: (id: string) => void;
@@ -34,6 +36,9 @@ interface GraphStore {
 
   // Sync from backend
   syncFromSnapshot: (snapshot: Record<string, unknown>) => void;
+  applyStateDelta: (
+    delta: Array<{ op: "add" | "remove" | "replace" | "move" | "copy" | "test"; path: string; value?: unknown; from?: string }>
+  ) => void;
 
   // Layout trigger
   bumpLayout: () => void;
@@ -52,11 +57,33 @@ export const useGraphStore = create<GraphStore>()(
     expandedIds: new Set(),
     layoutVersion: 0,
     selectedNodeId: null,
+    backendState: {},
 
     addNode: (node) =>
       set((s) => {
         if (!s.nodes.find((n) => n.id === node.id)) {
           s.nodes.push(node);
+        }
+      }),
+
+    applyLayout: (layout) =>
+      set((s) => {
+        for (const node of s.nodes) {
+          const positioned = layout[node.id];
+          if (!positioned) continue;
+          // Avoid unnecessary writes that can cause React Flow to emit
+          // repeated change events (e.g. dimensions) and create update loops.
+          if (node.position.x !== positioned.x || node.position.y !== positioned.y) {
+            node.position = { x: positioned.x, y: positioned.y };
+          }
+
+          // Prefer explicit width/height fields over mutating style.
+          if (positioned.width !== undefined && node.width !== positioned.width) {
+            node.width = positioned.width;
+          }
+          if (positioned.height !== undefined && node.height !== positioned.height) {
+            node.height = positioned.height;
+          }
         }
       }),
 
@@ -162,8 +189,45 @@ export const useGraphStore = create<GraphStore>()(
     },
 
     syncFromSnapshot: (snapshot) => {
-      // TODO: implement full snapshot sync in Phase 3
-      console.debug("STATE_SNAPSHOT received", snapshot);
+      set((s) => {
+        s.backendState = snapshot ?? {};
+      });
+    },
+
+    applyStateDelta: (delta) => {
+      set((s) => {
+        if (!delta?.length) return;
+        // Minimal RFC6902 support for add/replace/remove using JSON Pointer paths.
+        const root = (s.backendState ?? {}) as Record<string, unknown>;
+        for (const op of delta) {
+          if (!op?.path || op.path[0] !== "/") continue;
+          const parts = op.path
+            .split("/")
+            .slice(1)
+            .map((p) => p.replace(/~1/g, "/").replace(/~0/g, "~"));
+
+          const last = parts[parts.length - 1];
+          if (!last) continue;
+
+          let cur: any = root;
+          for (let i = 0; i < parts.length - 1; i++) {
+            const key = parts[i]!;
+            if (cur[key] === undefined || cur[key] === null || typeof cur[key] !== "object") {
+              cur[key] = {};
+            }
+            cur = cur[key];
+          }
+
+          if (op.op === "remove") {
+            if (cur && typeof cur === "object") {
+              delete cur[last];
+            }
+          } else if (op.op === "add" || op.op === "replace") {
+            cur[last] = op.value;
+          }
+        }
+        s.backendState = root;
+      });
     },
 
     bumpLayout: () => set((s) => { s.layoutVersion++; }),

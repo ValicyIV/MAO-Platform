@@ -389,7 +389,7 @@ async def build_agents() -> dict[str, Any]:
                 tool_list.extend(memory_tools)
         else:
             # Built-in: use role defaults + MCP tools
-            tool_list = role_tools.get(cfg.role, []) + await get_tools_for_agent(cfg.role)
+            tool_list = role_tools.get(cfg.role, []) + get_tools_for_agent(cfg.role)
 
         cfg.tools = tool_list
         built[name] = create_specialist_agent(cfg)

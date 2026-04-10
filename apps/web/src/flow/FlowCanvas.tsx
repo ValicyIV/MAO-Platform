@@ -82,8 +82,6 @@ export default function FlowCanvas({ viewMode }: FlowCanvasProps) {
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onNodeClick={onNodeClick}
-      fitView
-      fitViewOptions={{ padding: 0.2 }}
       minZoom={0.1}
       maxZoom={2}
       proOptions={{ hideAttribution: true }}

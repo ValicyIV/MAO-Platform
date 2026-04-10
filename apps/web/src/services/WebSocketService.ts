@@ -17,6 +17,7 @@ export class WebSocketService {
   private workflowId: string | null = null;
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingTask: string | null = null;
   private router = new AGUIEventRouter();
 
   static getInstance(): WebSocketService {
@@ -36,6 +37,7 @@ export class WebSocketService {
   disconnect(): void {
     this._clearReconnectTimer();
     this.workflowId = null;
+    this.pendingTask = null;
     if (this.ws) {
       this.ws.onclose = null; // prevent reconnect on intentional disconnect
       this.ws.close(1000, "client disconnect");
@@ -57,6 +59,10 @@ export class WebSocketService {
       console.error("[WS] execute called without workflowId");
       return;
     }
+    if (this.ws?.readyState !== WebSocket.OPEN) {
+      this.pendingTask = task;
+      return;
+    }
     this.send({ type: "execute", workflowId: this.workflowId, task });
   }
 
@@ -70,6 +76,11 @@ export class WebSocketService {
     this.ws.onopen = () => {
       console.debug("[WS] connected", this.workflowId);
       this.reconnectAttempt = 0;
+      if (this.pendingTask && this.workflowId) {
+        const task = this.pendingTask;
+        this.pendingTask = null;
+        this.send({ type: "execute", workflowId: this.workflowId, task });
+      }
     };
 
     this.ws.onmessage = (event: MessageEvent<string>) => {

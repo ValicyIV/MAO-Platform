@@ -47,7 +47,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await knowledge_graph.init()
         log.info("knowledge_graph.ready", path=settings.kuzu_db_path)
 
-    # 4. Heartbeat scheduler
+    # 4. Checkpointer async setup (Postgres tables)
+    from src.persistence.checkpointer import setup_checkpointer
+    await setup_checkpointer()
+
+    # 5. Heartbeat scheduler
     from src.graph.scheduler import heartbeat_scheduler
     scheduler_task = asyncio.create_task(heartbeat_scheduler.run())
     log.info("scheduler.started", interval=settings.heartbeat_interval)

@@ -9,6 +9,7 @@ Emits agent_handoff CUSTOM events for the frontend graph.
 """
 from __future__ import annotations
 
+import inspect
 import logging
 from typing import Any
 
@@ -58,6 +59,12 @@ COMPLETE_TOOL = {
         "required": ["summary"],
     },
 }
+
+
+async def _emit_writer_event(writer: Any, payload: dict[str, Any]) -> None:
+    result = writer(payload)
+    if inspect.isawaitable(result):
+        await result
 
 
 async def supervisor_node(
@@ -132,7 +139,7 @@ async def supervisor_node(
 
             # Emit handoff event for frontend graph
             if writer:
-                await writer({
+                await _emit_writer_event(writer, {
                     "type":          "CUSTOM",
                     "customType":    "agent_handoff",
                     "payload": {

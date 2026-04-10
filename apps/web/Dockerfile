@@ -7,7 +7,7 @@ RUN corepack enable pnpm
 WORKDIR /workspace
 
 # Copy workspace manifests first for layer caching
-COPY pnpm-workspace.yaml package.json turbo.json ./
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json turbo.json ./
 COPY packages/config/tsconfig.base.json ./packages/config/
 COPY packages/shared-types/package.json ./packages/shared-types/
 COPY packages/shared-types/tsconfig.json ./packages/shared-types/
@@ -15,7 +15,7 @@ COPY packages/shared-types/src/ ./packages/shared-types/src/
 COPY apps/web/package.json ./apps/web/
 
 # Install all workspace deps
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Copy web source
 COPY apps/web/ ./apps/web/

@@ -28,7 +28,8 @@ from src.config.settings import settings
 logger = logging.getLogger(__name__)
 
 # Base directory for all memory files (mounted as a Docker volume)
-MEMORY_BASE = Path(settings.kuzu_db_path).parent / "memory"
+_kuzu_path = Path(settings.kuzu_db_path)
+MEMORY_BASE = (_kuzu_path.parent.parent if _kuzu_path.suffix else _kuzu_path.parent) / "memory"
 MEMORY_BASE.mkdir(parents=True, exist_ok=True)
 
 

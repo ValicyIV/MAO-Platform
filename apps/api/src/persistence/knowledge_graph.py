@@ -28,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+from pathlib import Path
 import time
 from typing import Any
 
@@ -138,16 +139,25 @@ class KnowledgeGraph:
 
     # ── Lifecycle ──────────────────────────────────────────────────────────────
 
+    def _resolve_db_path(self, configured_path: str) -> Path:
+        path = Path(configured_path)
+        if path.exists() and path.is_dir():
+            return path / "mao.db"
+        if path.suffix:
+            return path
+        return path / "mao.db"
+
     async def init(self) -> None:
         from src.config.settings import settings
         loop = asyncio.get_event_loop()
-        import os; os.makedirs(settings.kuzu_db_path, exist_ok=True)
-        self._db   = await loop.run_in_executor(None, kuzu.Database, settings.kuzu_db_path)
+        db_path = self._resolve_db_path(settings.kuzu_db_path)
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._db   = await loop.run_in_executor(None, kuzu.Database, str(db_path))
         self._conn = await loop.run_in_executor(None, kuzu.Connection, self._db)
         await loop.run_in_executor(None, self._create_schema)
         await loop.run_in_executor(None, _get_embedder)   # warm up model
         self._ready = True
-        log.info("knowledge_graph.ready", path=settings.kuzu_db_path)
+        log.info("knowledge_graph.ready", path=str(db_path))
 
     def _create_schema(self) -> None:
         self._conn.execute(SCHEMA_ENTITIES)

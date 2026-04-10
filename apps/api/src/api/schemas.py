@@ -67,10 +67,11 @@ class MemorySearchResult(BaseModel):
 class MemoryGraphResponse(BaseModel):
     entities: list[dict[str, Any]]
     relationships: list[dict[str, Any]]
-    fetched_at: datetime
-    agent_filter: str | None
-    total_entities: int
-    total_relationships: int
+    # Match @mao/shared-types MemoryGraphDump (camelCase + ms timestamp)
+    fetchedAt: int
+    agentFilter: str | None
+    totalEntities: int
+    totalRelationships: int
 
 
 # ── Health ────────────────────────────────────────────────────────────────────

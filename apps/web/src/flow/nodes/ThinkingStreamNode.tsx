@@ -11,21 +11,23 @@
 //   + PretextService.getHeight → updateNode(height) — React Flow uses explicit height
 
 import { memo, useEffect, useRef } from "react";
-import { useReactFlow, type NodeProps } from "@xyflow/react";
+import type { NodeProps } from "@xyflow/react";
+import { useGraphStore } from "@/stores/graphStore";
 import { useStreamingStore } from "@/stores/streamingStore";
 import { PretextService } from "@/services/PretextService";
 import type { ThinkingStreamNodeData } from "@mao/shared-types";
 
 const NODE_WIDTH = 320;
-const LINE_HEIGHT = PretextService.LINE_HEIGHT;
+const LINE_HEIGHT = 20;
 const MAX_HEIGHT = 560;
 const PADDING_V = 40; // header + padding
 
-const ThinkingStreamNodeInner = ({ id, data }: NodeProps<ThinkingStreamNodeData>) => {
-  const { updateNode } = useReactFlow();
+const ThinkingStreamNodeInner = ({ id }: NodeProps<ThinkingStreamNodeData>) => {
+  const updateNodeDimensions = useGraphStore((s) => s.updateNodeDimensions);
   const textRef = useRef<HTMLPreElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastTextLengthRef = useRef(0);
+  const lastHeightRef = useRef<number | null>(null);
 
   // Subscribe to streamingStore for THIS node only
   const streamState = useStreamingStore((s) => s.streams[id]);
@@ -51,11 +53,16 @@ const ThinkingStreamNodeInner = ({ id, data }: NodeProps<ThinkingStreamNodeData>
     const clampedHeight = Math.min(measuredHeight + PADDING_V, MAX_HEIGHT);
 
     // Update React Flow node dimensions — it will use this instead of measuring DOM
-    updateNode(id, { height: clampedHeight });
+    if (lastHeightRef.current !== clampedHeight) {
+      lastHeightRef.current = clampedHeight;
+      updateNodeDimensions(id, { height: clampedHeight });
+    }
 
     // Store the height in streamingStore for other subscribers
-    useStreamingStore.getState().setMeasuredHeight(id, clampedHeight);
-  });
+    if (streamState.measuredHeight !== clampedHeight) {
+      useStreamingStore.getState().setMeasuredHeight(id, clampedHeight);
+    }
+  }, [id, streamState?.text, streamState?.isStreaming, streamState?.measuredHeight, updateNodeDimensions]);
 
   // Evict Pretext cache when stream ends to free memory
   useEffect(() => {

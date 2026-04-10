@@ -6,6 +6,7 @@ emits custom streaming events, and returns the state update.
 """
 from __future__ import annotations
 import asyncio
+import inspect
 import logging
 import time
 from typing import Any
@@ -14,6 +15,12 @@ from src.graph.state import OrchestratorState
 from src.observability.telemetry import observe
 
 logger = logging.getLogger(__name__)
+
+
+async def _emit_writer_event(writer: Any, payload: dict[str, Any]) -> None:
+    result = writer(payload)
+    if inspect.isawaitable(result):
+        await result
 
 
 @observe("graph.agent_node")
@@ -42,7 +49,7 @@ async def agent_node(
 
     # Emit STEP_STARTED custom event
     if writer:
-        await writer({
+        await _emit_writer_event(writer, {
             "type": "step_started",
             "agent_id": agent_id,
             "step_name": f"{agent_id} invocation",
@@ -66,7 +73,7 @@ async def agent_node(
         )
 
         if writer:
-            await writer({
+            await _emit_writer_event(writer, {
                 "type": "step_finished",
                 "agent_id": agent_id,
                 "duration_ms": int((time.time() - start) * 1000),
@@ -80,7 +87,7 @@ async def agent_node(
     except Exception as exc:
         logger.error("Agent node %s failed: %s", agent_id, exc)
         if writer:
-            await writer({"type": "agent_error", "agent_id": agent_id, "error": str(exc)})
+            await _emit_writer_event(writer, {"type": "agent_error", "agent_id": agent_id, "error": str(exc)})
         return {
             "agent_outputs": {agent_id: f"ERROR: {exc}"},
             "current_agent": agent_id,
@@ -103,3 +110,34 @@ def _extract_output(result: Any) -> str:
                 return str(content)
         return str(result.get("output", result))
     return str(result)
+
+
+# ── Concrete LangGraph nodes (imported by graph.py) ────────────────────────────
+
+async def _get_agent(agent_name: str) -> Any:
+    from src.agents.registry import build_agents
+    agents = await build_agents()
+    agent = agents.get(agent_name)
+    if not agent:
+        raise RuntimeError(f"Agent '{agent_name}' not available")
+    return agent
+
+
+async def research_node(state: OrchestratorState, writer: Any = None) -> dict[str, Any]:
+    return await agent_node(state, await _get_agent("research"), "research", writer=writer)
+
+
+async def code_node(state: OrchestratorState, writer: Any = None) -> dict[str, Any]:
+    return await agent_node(state, await _get_agent("code"), "code", writer=writer)
+
+
+async def data_node(state: OrchestratorState, writer: Any = None) -> dict[str, Any]:
+    return await agent_node(state, await _get_agent("data"), "data", writer=writer)
+
+
+async def writer_node(state: OrchestratorState, writer: Any = None) -> dict[str, Any]:
+    return await agent_node(state, await _get_agent("writer"), "writer", writer=writer)
+
+
+async def verifier_node(state: OrchestratorState, writer: Any = None) -> dict[str, Any]:
+    return await agent_node(state, await _get_agent("verifier"), "verifier", writer=writer)

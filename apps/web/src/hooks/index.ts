@@ -68,8 +68,7 @@ export function useAgentConnection(): ConnectionState {
     svc.connect(wfId);
     setWorkflowId(wfId);
     setConnected(true);
-    // Execute the task after connection
-    setTimeout(() => svc.execute(task), 200);
+    svc.execute(task);
   }, []);
 
   const disconnect = useCallback(() => {

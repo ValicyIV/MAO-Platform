@@ -116,5 +116,6 @@ export function Toolbar({ viewMode, onViewModeChange, workflowId, onWorkflowStar
       {showConfig && (
         <AgentConfigPanel onClose={() => setShowConfig(false)} />
       )}
+    </div>
   );
 }

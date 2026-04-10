@@ -10,6 +10,7 @@ Enable in Phase 7 when cross-system agent communication is needed.
 
 from __future__ import annotations
 
+import json
 import uuid
 from typing import AsyncGenerator
 
@@ -43,7 +44,7 @@ async def agent_card_discovery() -> dict:
     }
 
 
-@router.get("/a2a/{agent_name}/.well-known/agent-card.json")
+@router.get("/{agent_name}/.well-known/agent-card.json")
 async def specialist_agent_card(agent_name: str) -> dict:
     """Per-agent A2A card discovery."""
     card = AGENT_CARDS.get(agent_name)
@@ -53,7 +54,7 @@ async def specialist_agent_card(agent_name: str) -> dict:
     return card.to_dict()
 
 
-@router.post("/a2a/{agent_name}")
+@router.post("/{agent_name}")
 async def a2a_task(agent_name: str, request: A2ATaskRequest) -> StreamingResponse:
     """
     A2A task endpoint — receives a task from an external agent and streams the response.
@@ -72,7 +73,7 @@ async def a2a_task(agent_name: str, request: A2ATaskRequest) -> StreamingRespons
     log.info("a2a.task_received", agent=agent_name, task_id=task_id)
 
     async def stream_response() -> AsyncGenerator[bytes, None]:
-        agents = build_agents()
+        agents = await build_agents()
         agent = agents.get(agent_name)
         if not agent:
             yield f'data: {{"type": "error", "message": "Agent not available"}}\n\n'.encode()
@@ -87,7 +88,7 @@ async def a2a_task(agent_name: str, request: A2ATaskRequest) -> StreamingRespons
                 (m.content for m in reversed(output_msgs) if hasattr(m, "content") and isinstance(m.content, str)),
                 ""
             )
-            yield f'data: {{"type": "text", "text": {repr(final)}}}\n\n'.encode()
+            yield f'data: {{"type": "text", "text": {json.dumps(final)}}}\n\n'.encode()
             yield f'data: {{"type": "task_complete", "taskId": "{task_id}"}}\n\n'.encode()
         except Exception as e:
             log.error("a2a.task_failed", agent=agent_name, error=str(e))

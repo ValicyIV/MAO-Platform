@@ -72,14 +72,23 @@ class HeartbeatScheduler:
 
     @property
     def _prune_every(self) -> int:
-        """Prune logs every 48 beats (~24h at 30s interval)."""
-        return 48 * 2  # twice daily
+        """Prune logs twice daily (derived from heartbeat interval)."""
+        try:
+            interval_s = float(settings.heartbeat_interval)
+        except Exception:
+            interval_s = 30.0
+        # 12h cadence, minimum 1 beat
+        return max(1, int((12 * 60 * 60) / max(1.0, interval_s)))
 
     async def _check_consolidation_pending(self) -> bool:
         """Check if any agent has unprocessed episodes."""
         try:
-            from src.persistence.memory_store import memory_store
-            return await memory_store.has_unprocessed_episodes()
+            from src.persistence.memory_store import list_agent_ids, load_recent_episodes
+
+            for agent_id in await list_agent_ids():
+                if await load_recent_episodes(agent_id):
+                    return True
+            return False
         except Exception:
             return False
 
@@ -108,13 +117,14 @@ class HeartbeatScheduler:
             return
         try:
             from src.persistence.memory_consolidator import memory_consolidator
-            result = await memory_consolidator.consolidate_all()
-            if result["agents_processed"] > 0:
+            results = await memory_consolidator.consolidate_all()
+            processed = [result for result in results if not result.get("skipped") and not result.get("error")]
+            if processed:
                 log.info(
                     "consolidation.complete",
-                    agents=result["agents_processed"],
-                    kg_nodes_added=result["total_kg_nodes_added"],
-                    conflicts=result["total_conflicts"],
+                    agents=len(processed),
+                    kg_nodes_added=sum(result.get("kgNodesAdded", 0) for result in processed),
+                    conflicts=sum(result.get("conflictsDetected", 0) for result in processed),
                 )
         except Exception as e:
             log.error("consolidation.failed", error=str(e))
@@ -122,10 +132,11 @@ class HeartbeatScheduler:
     async def _prune_stale_logs(self) -> None:
         """Remove episode log files older than MEMORY_RETENTION_DAYS."""
         try:
-            from src.persistence.memory_store import memory_store
-            pruned = await memory_store.prune_old_episodes(
-                days=settings.memory_retention_days
-            )
+            from src.persistence.memory_store import list_agent_ids, prune_old_episodes
+
+            pruned = 0
+            for agent_id in await list_agent_ids():
+                pruned += await prune_old_episodes(agent_id)
             if pruned > 0:
                 log.info("scheduler.logs_pruned", files_removed=pruned)
         except Exception as e:

@@ -90,6 +90,7 @@ export interface TextMessageStartEvent extends BaseEvent {
   nodeId: string;          // target ThinkingStreamNode id
   agentId: string;
   isThinking: boolean;     // true = extended thinking block
+  stepId?: string;         // optional parent step node id (MAO extension)
 }
 
 export interface TextMessageContentEvent extends BaseEvent {

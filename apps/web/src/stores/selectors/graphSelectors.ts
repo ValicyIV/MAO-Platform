@@ -1,13 +1,16 @@
 // selectors/graphSelectors.ts
-import type { Node, Edge } from "@xyflow/react";
-import type { NodeDataUnion } from "@mao/shared-types";
+import { useMemo } from "react";
 import { useGraphStore } from "../graphStore";
 
-export const useVisibleNodes = () =>
-  useGraphStore((s) => s.nodes.filter((n) => !n.hidden));
+export const useVisibleNodes = () => {
+  const nodes = useGraphStore((s) => s.nodes);
+  return useMemo(() => nodes.filter((n) => !n.hidden), [nodes]);
+};
 
-export const useVisibleEdges = () =>
-  useGraphStore((s) => s.edges.filter((e) => !e.hidden));
+export const useVisibleEdges = () => {
+  const edges = useGraphStore((s) => s.edges);
+  return useMemo(() => edges.filter((e) => !e.hidden), [edges]);
+};
 
 export const useNodeById = (id: string) =>
   useGraphStore((s) => s.nodes.find((n) => n.id === id));

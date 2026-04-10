@@ -4,7 +4,6 @@
 
 import { useEffect, useRef } from "react";
 import ELK, { type ElkNode } from "elkjs/lib/elk.bundled.js";
-import { useReactFlow } from "@xyflow/react";
 import { useGraphStore } from "@/stores/graphStore";
 
 const elk = new ELK();
@@ -20,7 +19,6 @@ const ELK_OPTIONS: Record<string, string> = {
 };
 
 export function useAutoLayout(layoutVersion: number) {
-  const { setNodes } = useReactFlow();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -59,26 +57,27 @@ export function useAutoLayout(layoutVersion: number) {
         };
 
         const layout = await elk.layout(elkGraph);
-
-        setNodes((current) =>
-          current.map((node) => {
-            // Find position in ELK result
+        const positionedNodes = Object.fromEntries(
+          visibleNodes.map((node) => {
             const found =
               layout.children?.find((c) => c.id === node.id) ??
               layout.children
                 ?.flatMap((c) => c.children ?? [])
                 .find((c) => c.id === node.id);
 
-            if (found?.x !== undefined && found.y !== undefined) {
-              return {
-                ...node,
-                position: { x: found.x, y: found.y },
-                style: { ...node.style, width: found.width, height: found.height },
-              };
-            }
-            return node;
+            return [
+              node.id,
+              {
+                x: found?.x ?? node.position.x,
+                y: found?.y ?? node.position.y,
+                width: found?.width,
+                height: found?.height,
+              },
+            ];
           })
         );
+
+        useGraphStore.getState().applyLayout(positionedNodes);
       } catch (e) {
         console.warn("[ELK] layout failed:", e);
       }
@@ -87,5 +86,5 @@ export function useAutoLayout(layoutVersion: number) {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [layoutVersion, setNodes]);
+  }, [layoutVersion]);
 }

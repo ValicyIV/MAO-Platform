@@ -7,6 +7,7 @@ Prefixed at /api by main.py.
 from __future__ import annotations
 
 import uuid
+import time
 from datetime import datetime, timezone
 
 import structlog
@@ -249,10 +250,10 @@ async def get_memory_graph(
     return MemoryGraphResponse(
         entities=dump["entities"],
         relationships=dump["relationships"],
-        fetched_at=datetime.now(tz=timezone.utc),
-        agent_filter=agent_id,
-        total_entities=len(dump["entities"]),
-        total_relationships=len(dump["relationships"]),
+        fetchedAt=int(time.time() * 1000),
+        agentFilter=agent_id,
+        totalEntities=len(dump["entities"]),
+        totalRelationships=len(dump["relationships"]),
     )
 
 
