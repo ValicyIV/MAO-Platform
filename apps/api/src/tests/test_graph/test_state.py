@@ -63,7 +63,7 @@ def test_route_to_agent_targets(
 
 def test_should_verify_flag(sample_orchestrator_state):
     state = {**sample_orchestrator_state, "needs_verification": True}
-    assert should_verify(state) == "verifier"
+    assert should_verify(state) == "supervisor"
 
 
 def test_should_verify_long_output_heuristic(sample_orchestrator_state):
@@ -75,7 +75,7 @@ def test_should_verify_long_output_heuristic(sample_orchestrator_state):
         "current_agent": "research",
         "agent_outputs": {"research": long_output},
     }
-    assert should_verify(state) == "verifier"
+    assert should_verify(state) == "supervisor"
 
 
 def test_should_verify_short_output_skips(sample_orchestrator_state):

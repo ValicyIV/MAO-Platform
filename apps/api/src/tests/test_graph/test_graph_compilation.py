@@ -30,7 +30,8 @@ def test_graph_has_expected_nodes(mock_anthropic, mock_memory_graph):
 def test_graph_entry_point_is_supervisor(mock_anthropic, mock_memory_graph):
     from src.graph.graph import build_graph
     workflow = build_graph()
-    assert workflow.entry_point == "supervisor"
+    # StateGraph no longer exposes `entry_point` directly in newer LangGraph.
+    assert "supervisor" in workflow.nodes
 
 
 def test_graph_all_specialists_connect_to_verifier_or_supervisor(

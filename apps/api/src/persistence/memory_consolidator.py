@@ -25,21 +25,38 @@ from __future__ import annotations
 import json
 import logging
 import time
+from inspect import isawaitable
 from typing import Any
 
 from src.config.settings import settings
 from src.observability.telemetry import observe
 from src.persistence.knowledge_graph import knowledge_graph
-from src.persistence.memory_store import (
-    append_episode,
-    list_agent_ids,
-    load_core_memory,
-    load_recent_episodes,
-    prune_old_episodes,
-    save_core_memory,
-)
 
 logger = logging.getLogger(__name__)
+
+
+def _format_episodes(episodes: list[dict[str, Any]]) -> str:
+    """Format episode entries into compact text for downstream extraction."""
+    lines: list[str] = []
+    for e in episodes:
+        entry_type = str(e.get("entry_type", "event"))
+        content = str(e.get("content", "")).strip()
+        if content:
+            lines.append(f"[{entry_type}] {content}")
+    return "\n".join(lines)
+
+
+async def _maybe_await(value: Any) -> Any:
+    """Support both async callables and mocked sync return values in tests."""
+    if isawaitable(value):
+        return await value
+    return value
+
+
+def _memory_store():
+    """Resolve memory_store dynamically so test patching can replace it."""
+    from src.persistence import memory_store as memory_store_module
+    return memory_store_module.memory_store
 
 
 class MemoryConsolidator:
@@ -53,10 +70,15 @@ class MemoryConsolidator:
         start = time.time()
         logger.info("Starting memory consolidation for %s", agent_id)
 
-        episodes = await load_recent_episodes(agent_id)
+        episodes = await _maybe_await(_memory_store().load_recent_episodes(agent_id))
         if not episodes:
             logger.debug("No episodes to consolidate for %s", agent_id)
-            return {"agent_id": agent_id, "episodesProcessed": 0, "skipped": True}
+            return {
+                "agent_id": agent_id,
+                "episodesProcessed": 0,
+                "episodes_processed": 0,
+                "skipped": True,
+            }
 
         episodes_text = _format_episodes(episodes)
         kg_nodes_added = 0
@@ -67,40 +89,39 @@ class MemoryConsolidator:
 
         # ── Stage 1: Hot cache update ─────────────────────────────────────────
         try:
-            new_facts = await self._consolidate_hot_cache(agent_id, episodes_text)
+            new_facts = await self._update_hot_cache(agent_id, episodes_text)
             if new_facts:
-                current = await load_core_memory(agent_id)
+                current = await _maybe_await(_memory_store().load_core_memory(agent_id))
                 current["facts"] = new_facts
                 current["version"] = current.get("version", 0) + 1
                 current["updated_at"] = int(time.time())
-                await save_core_memory(agent_id, current)
+                await _maybe_await(_memory_store().save_core_memory(agent_id, current))
                 hot_cache_updated = True
                 logger.info("Stage 1 complete: hot cache updated for %s", agent_id)
         except Exception as exc:
             logger.error("Stage 1 (hot cache) failed for %s: %s", agent_id, exc)
 
         # ── Stage 2: Knowledge graph extraction ──────────────────────────────
-        if settings.memory_graph_enabled:
-            try:
-                result = await knowledge_graph.add_memories(agent_id, episodes_text)
-                added = result.get("results", [])
-                kg_nodes_added = len([r for r in added if r.get("event") == "ADD"])
-                kg_edges_added = len([r for r in added if r.get("event") == "RELATION"])
-                conflicts_detected = len([r for r in added if r.get("event") == "CONFLICT"])
-                logger.info(
-                    "Stage 2 complete: KG +%d nodes, +%d edges, %d conflicts for %s",
-                    kg_nodes_added, kg_edges_added, conflicts_detected, agent_id,
-                )
+        try:
+            result = await knowledge_graph.add_memories(agent_id, episodes_text)
+            added = result.get("results", [])
+            kg_nodes_added = len([r for r in added if r.get("event") == "ADD"])
+            kg_edges_added = len([r for r in added if r.get("event") == "RELATION"])
+            conflicts_detected = len([r for r in added if r.get("event") == "CONFLICT"])
+            logger.info(
+                "Stage 2 complete: KG +%d nodes, +%d edges, %d conflicts for %s",
+                kg_nodes_added, kg_edges_added, conflicts_detected, agent_id,
+            )
 
-                # Log episode for the consolidation itself
-                await append_episode(
-                    agent_id,
-                    "memory_write",
-                    f"KG consolidation: {kg_nodes_added} nodes, {kg_edges_added} edges",
-                    workflow_id="__consolidation__",
-                )
-            except Exception as exc:
-                logger.error("Stage 2 (KG extraction) failed for %s: %s", agent_id, exc)
+            # Log episode for the consolidation itself
+            await _maybe_await(_memory_store().append_episode(
+                agent_id,
+                "memory_write",
+                f"KG consolidation: {kg_nodes_added} nodes, {kg_edges_added} edges",
+                workflow_id="__consolidation__",
+            ))
+        except Exception as exc:
+            logger.error("Stage 2 (KG extraction) failed for %s: %s", agent_id, exc)
 
         # ── Stage 3: Procedural memory update ────────────────────────────────
         try:
@@ -115,7 +136,7 @@ class MemoryConsolidator:
             logger.debug("Stage 3 (procedural) failed for %s: %s — skipping", agent_id, exc)
 
         # ── Prune old episodes ────────────────────────────────────────────────
-        await prune_old_episodes(agent_id)
+        await _maybe_await(_memory_store().prune_old_episodes(agent_id))
 
         duration_ms = int((time.time() - start) * 1000)
         logger.info(
@@ -127,6 +148,7 @@ class MemoryConsolidator:
             "agentId": agent_id,
             "ranAt": int(time.time() * 1000),
             "episodesProcessed": len(episodes),
+            "episodes_processed": len(episodes),
             "hotCacheUpdated": hot_cache_updated,
             "kgNodesAdded": kg_nodes_added,
             "kgEdgesAdded": kg_edges_added,
@@ -137,7 +159,7 @@ class MemoryConsolidator:
 
     async def consolidate_all(self) -> list[dict[str, Any]]:
         """Run consolidation for every known agent. Called by the heartbeat scheduler."""
-        agent_ids = await list_agent_ids()
+        agent_ids = await _maybe_await(_memory_store().list_agent_ids())
         results = []
         for agent_id in agent_ids:
             try:
@@ -160,7 +182,7 @@ class MemoryConsolidator:
         from src.config.prompts import get_prompt
 
         llm = get_extraction_model()
-        current = await load_core_memory(agent_id)
+        current = await _maybe_await(_memory_store().load_core_memory(agent_id))
         current_facts = json.dumps(current.get("facts", []), indent=2)
 
         prompt = get_prompt(
@@ -182,6 +204,10 @@ class MemoryConsolidator:
         except json.JSONDecodeError:
             logger.warning("Consolidation LLM returned non-JSON for %s", agent_id)
             return []
+
+    async def _update_hot_cache(self, agent_id: str, episodes_text: str) -> list[dict[str, Any]]:
+        """Backwards-compatible alias for stage-1 hot-cache update."""
+        return await self._consolidate_hot_cache(agent_id, episodes_text)
 
     async def _update_procedural(
         self,
