@@ -77,7 +77,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       KUZU_DB_PATH: /app/data/kuzu/mao.db
       MEMORY_GRAPH_ENABLED: "true"
-      CORS_ORIGINS: '["http://localhost:5173"]'
+      # Browser may use localhost or 127.0.0.1; dev Vite also uses :5173.
+      CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
     volumes:
       - ./data/agent-memory:/app/data/memory
       - ./data/kuzu:/app/data/kuzu

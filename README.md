@@ -22,6 +22,8 @@ FastAPI backend
 
 ## Quick start
 
+The **full program** is the React UI **plus** the FastAPI service (LangGraph orchestration, WebSocket streaming, memory APIs) **plus** the backing services Postgres, Redis, and Langfuse. You can hack the UI alone with `pnpm dev` in `apps/web`, but **live agents, streaming, and the memory graph need the API and its dependencies**.
+
 ### Prerequisites
 
 - Python 3.12+
@@ -39,30 +41,39 @@ cp .env.example .env
 # Edit .env — at minimum set ANTHROPIC_API_KEY
 ```
 
-### 2. Start everything
+### 2. Run the full stack (pick one)
+
+**Option A — Docker (simplest full product):** builds the production UI (nginx) and API, wires `/api` and `/ws` for you.
+
+```bash
+docker compose up -d --build
+```
+
+Open **http://localhost:5173**. API docs: **http://localhost:8000/api/docs**.
+
+**Option B — Local dev (hot reload on web + API):** supporting services in Docker; API and Vite on the host.
+
+**Linux / macOS (bash):**
 
 ```bash
 chmod +x scripts/dev.sh
 ./scripts/dev.sh
 ```
 
-This starts:
+**Windows (PowerShell, from repo root):**
+
+```powershell
+.\scripts\dev.ps1
+```
+
+Docker Compose starts Postgres, Redis, and Langfuse; one terminal runs `uvicorn --reload`, the other runs Vite. Requires `uv` on your PATH; `pnpm` is activated via `corepack` if needed.
+
 | Service   | URL                           |
 |-----------|-------------------------------|
 | Frontend  | http://localhost:5173         |
 | API       | http://localhost:8000         |
 | API docs  | http://localhost:8000/api/docs|
 | Langfuse  | http://localhost:3001         |
-
-### Docker (full stack)
-
-From the repo root, with `.env` filled in (at minimum an LLM key):
-
-```bash
-docker compose up -d --build
-```
-
-Open **http://localhost:5173** for the UI. Nginx in the `web` container proxies **`/api`** and **`/ws`** to the `api` service, so the browser uses a single origin. API docs directly: **http://localhost:8000/api/docs**.
 
 ### 3. Run a workflow
 
@@ -120,6 +131,23 @@ mao-platform/
 | 14 | Cross-agent knowledge graph | `persistence/knowledge_graph.py` |
 | 15 | Memory-augmented context injection | `persistence/memory_retriever.py` |
 | 16 | Memory Graph UI view | `flow/memory/MemoryGraphCanvas.tsx` |
+
+## Git on this remote
+
+If `git pull` says there is no tracking information for `main`, the remote may not publish `origin/main` (only branches such as `mao-platform-split`). Use either:
+
+```bash
+git checkout mao-platform-split && git pull
+```
+
+or point local `main` at that branch once:
+
+```bash
+git branch --set-upstream-to=origin/mao-platform-split main
+git pull
+```
+
+After switching branches or pulling, **rebuild Docker images** (`docker compose up -d --build`) so containers match the code on disk.
 
 ## Development phases
 

@@ -71,22 +71,32 @@ export const useMemoryGraphStore = create<MemoryGraphStore>()((set, get) => ({
         set({ isLoading: false, lastFetchError: friendly });
         return;
       }
-      const data = await res.json();
+      const data = (await res.json()) as {
+        entities?: unknown;
+        relationships?: unknown;
+      };
 
-      const entities: Node<MemoryNodeData>[] = data.entities.map((e: { id: string; data: MemoryNodeData; position?: { x: number; y: number } }) => ({
-        id: e.id,
-        type: "memoryEntity",
-        position: e.position ?? { x: 0, y: 0 },
-        data: e.data,
-      }));
+      const rawEntities = Array.isArray(data.entities) ? data.entities : [];
+      const rawRels = Array.isArray(data.relationships) ? data.relationships : [];
 
-      const relationships: Edge<MemoryEdgeData>[] = data.relationships.map((r: { id: string; source: string; target: string; data: MemoryEdgeData }) => ({
-        id: r.id,
-        source: r.source,
-        target: r.target,
-        type: "memoryRelationship",
-        data: r.data,
-      }));
+      const entities: Node<MemoryNodeData>[] = rawEntities.map(
+        (e: { id: string; data: MemoryNodeData; position?: { x: number; y: number } }) => ({
+          id: e.id,
+          type: "memoryEntity",
+          position: e.position ?? { x: 0, y: 0 },
+          data: e.data,
+        })
+      );
+
+      const relationships: Edge<MemoryEdgeData>[] = rawRels.map(
+        (r: { id: string; source: string; target: string; data: MemoryEdgeData }) => ({
+          id: r.id,
+          source: r.source,
+          target: r.target,
+          type: "memoryRelationship",
+          data: r.data,
+        })
+      );
 
       set({
         entities,

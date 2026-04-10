@@ -29,6 +29,8 @@ const ThinkingStreamNodeInner = ({ id }: NodeProps<ThinkingStreamNodeData>) => {
   const textRef = useRef<HTMLPreElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastTextRef = useRef("");
+  /** Skip identical dimension writes — avoids RF ↔ zustand feedback (#185 max update depth). */
+  const lastReportedHeightRef = useRef<number>(-1);
 
   // Subscribe to streamingStore for THIS node only
   const streamState = useStreamingStore((s) => s.streams[id]);
@@ -50,6 +52,8 @@ const ThinkingStreamNodeInner = ({ id }: NodeProps<ThinkingStreamNodeData>) => {
   }, [text]);
 
   useLayoutEffect(() => {
+    if (lastReportedHeightRef.current === clampedHeight) return;
+    lastReportedHeightRef.current = clampedHeight;
     useGraphStore.getState().updateNodeDimensions(id, { width: NODE_WIDTH, height: clampedHeight });
     useStreamingStore.getState().setMeasuredHeight(id, clampedHeight);
   }, [id, clampedHeight]);

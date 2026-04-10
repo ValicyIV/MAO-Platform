@@ -20,6 +20,8 @@ function websocketBaseUrl(): string {
 
 // Reconnect backoff: 1s, 2s, 4s, 8s, 16s, 30s (capped)
 const BACKOFF_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
+/** Stop after this many failed opens so a missing API does not spin forever. */
+const MAX_RECONNECT_ATTEMPTS = 8;
 
 export class WebSocketService {
   private static _instance: WebSocketService | null = null;
@@ -100,7 +102,11 @@ export class WebSocketService {
     this.ws.onmessage = (event: MessageEvent<string>) => {
       try {
         const msg = JSON.parse(event.data) as ServerMessage;
-        this.router.route(msg);
+        try {
+          this.router.route(msg);
+        } catch (routeErr) {
+          console.error("[WS] router error (server message will not crash UI):", routeErr);
+        }
       } catch (e) {
         console.error("[WS] parse error", e);
       }
@@ -120,6 +126,12 @@ export class WebSocketService {
 
   private _scheduleReconnect(): void {
     if (!this.workflowId) return;
+    if (this.reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+      console.warn(
+        `[WS] stopped reconnecting after ${MAX_RECONNECT_ATTEMPTS} attempts (is the API up?). Click Run again after starting the backend.`
+      );
+      return;
+    }
     const delay = BACKOFF_DELAYS[Math.min(this.reconnectAttempt, BACKOFF_DELAYS.length - 1)] ?? 30000;
     this.reconnectAttempt++;
     console.debug(`[WS] reconnecting in ${delay}ms (attempt ${this.reconnectAttempt})`);

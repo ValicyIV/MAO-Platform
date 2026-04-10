@@ -54,30 +54,42 @@ export class AGUIEventRouter {
   // ── Main dispatch ───────────────────────────────────────────────────────────
 
   route(msg: ServerMessage): void {
-    switch (msg.type) {
-      case "event": {
-        const processed = applyMiddleware(msg.event, DEFAULT_MIDDLEWARE);
-        if (processed) this._handleEvent(processed);
-        break;
+    try {
+      switch (msg.type) {
+        case "event": {
+          if (!msg.event || typeof msg.event !== "object") break;
+          const processed = applyMiddleware(msg.event as AgentEvent, DEFAULT_MIDDLEWARE);
+          if (processed) this._handleEvent(processed);
+          break;
+        }
+        case "status":
+          this._handleStatus(msg);
+          break;
+        case "connected":
+          console.debug("[Router] connected", msg.sessionId);
+          break;
+        case "error":
+          console.error("[Router] server error", msg.code, msg.message);
+          break;
+        case "pong":
+          break;
       }
-      case "status":
-        this._handleStatus(msg);
-        break;
-      case "connected":
-        console.debug("[Router] connected", msg.sessionId);
-        break;
-      case "error":
-        console.error("[Router] server error", msg.code, msg.message);
-        break;
-      case "pong":
-        // Latency monitoring hook — no store update needed
-        break;
+    } catch (e) {
+      console.error("[Router] route() error:", e);
     }
   }
 
   // ── AG-UI event handler ─────────────────────────────────────────────────────
 
   private _handleEvent(event: AgentEvent): void {
+    try {
+      this._handleEventInner(event);
+    } catch (e) {
+      console.error("[Router] _handleEvent error:", e, event);
+    }
+  }
+
+  private _handleEventInner(event: AgentEvent): void {
     const graphStore = useGraphStore.getState();
     const streamingStore = useStreamingStore.getState();
     const statusStore = useAgentStatusStore.getState();
@@ -158,6 +170,7 @@ export class AGUIEventRouter {
         break;
     }
   }
+
 
   private _handleCustom(event: CustomEvent): void {
     const { customType, payload } = event;

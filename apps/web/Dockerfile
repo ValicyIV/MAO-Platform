@@ -20,8 +20,8 @@ RUN pnpm install --no-frozen-lockfile
 # Copy web source
 COPY apps/web/ ./apps/web/
 
-# Build
-RUN pnpm --filter @mao/web build
+# Build — pnpm exec resolves vite from the workspace root (plain `vite` breaks in Docker).
+RUN pnpm --filter @mao/web exec vite build
 
 # ── Stage 2: serve ─────────────────────────────────────────────────────────────
 FROM nginx:1.27-alpine AS runner

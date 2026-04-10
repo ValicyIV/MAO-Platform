@@ -5,7 +5,12 @@ import { resolve } from "path";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  build: {
+    // Makes production (Docker nginx) stack traces usable; slightly larger assets.
+    sourcemap: true,
+  },
   resolve: {
+    dedupe: ["react", "react-dom"],
     alias: {
       "@": resolve(__dirname, "src"),
     },
