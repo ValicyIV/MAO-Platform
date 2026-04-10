@@ -2,67 +2,64 @@
 //
 // THE performance-critical node. Implements:
 //   - Pattern 11: reads from streamingStore (RAF-buffered, never per-token)
-//   - Pattern 12: Pretext-measured height (no getBoundingClientRect)
-//   - Direct DOM mutation via textRef (no React setState per token)
+//   - Pattern 12: PRETEXT-only sizing (prepare + layout) — no DOM measurement for layout
+//   - Direct DOM mutation via textRef for text only (no DOM reads for size/scroll)
 //   - React.memo (MANDATORY — prevents re-renders from parent node updates)
 //
-// Update path per RAF frame (16ms):
-//   streamingStore.appendBatch → this component's useEffect → textRef.current.textContent
-//   + PretextService.getHeight → updateNode(height) — React Flow uses explicit height
+// Node height is computed with PretextService before paint, then pushed to graphStore
+// via updateNodeDimensions (no useUpdateNodeInternals / ResizeObserver for this node).
 
-import { memo, useEffect, useRef } from "react";
-import type { NodeProps } from "@xyflow/react";
-import { useGraphStore } from "@/stores/graphStore";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { type NodeProps } from "@xyflow/react";
 import { useStreamingStore } from "@/stores/streamingStore";
+import { useGraphStore } from "@/stores/graphStore";
 import { PretextService } from "@/services/PretextService";
 import type { ThinkingStreamNodeData } from "@mao/shared-types";
 
 const NODE_WIDTH = 320;
 const LINE_HEIGHT = 20;
 const MAX_HEIGHT = 560;
-const PADDING_V = 40; // header + padding
+const PADDING_V = 40; // header + chrome
+/** Vertical padding on `<pre>`: Tailwind `p-3` → 12px × 2 */
+const PRE_PADDING_V = 24;
+/** Approx. extra scroll extent for streaming cursor row below the pre */
+const CURSOR_SCROLL_EXTRA = 20;
 
 const ThinkingStreamNodeInner = ({ id }: NodeProps<ThinkingStreamNodeData>) => {
-  const updateNodeDimensions = useGraphStore((s) => s.updateNodeDimensions);
   const textRef = useRef<HTMLPreElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const lastTextLengthRef = useRef(0);
-  const lastHeightRef = useRef<number | null>(null);
+  const lastTextRef = useRef("");
 
   // Subscribe to streamingStore for THIS node only
   const streamState = useStreamingStore((s) => s.streams[id]);
+  const text = streamState?.text ?? "";
+  const isStreaming = streamState?.isStreaming ?? false;
 
-  useEffect(() => {
-    if (!streamState || !textRef.current) return;
-    const { text, isStreaming } = streamState;
+  const textBlockHeight = useMemo(
+    () => PretextService.getHeight(id, text, NODE_WIDTH, LINE_HEIGHT),
+    [id, text]
+  );
 
-    // Skip if text hasn't changed
-    if (text.length === lastTextLengthRef.current) return;
-    lastTextLengthRef.current = text.length;
+  const clampedHeight = Math.min(textBlockHeight + PADDING_V, MAX_HEIGHT);
 
-    // Direct DOM mutation — bypass React reconciliation entirely
-    textRef.current.textContent = text;
-
-    // Auto-scroll to bottom while streaming
-    if (isStreaming && containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+  useLayoutEffect(() => {
+    if (textRef.current && lastTextRef.current !== text) {
+      lastTextRef.current = text;
+      textRef.current.textContent = text;
     }
+  }, [text]);
 
-    // Pretext height measurement (Pattern 12) — NO getBoundingClientRect
-    const measuredHeight = PretextService.getHeight(id, text, NODE_WIDTH - 32, LINE_HEIGHT);
-    const clampedHeight = Math.min(measuredHeight + PADDING_V, MAX_HEIGHT);
+  useLayoutEffect(() => {
+    useGraphStore.getState().updateNodeDimensions(id, { width: NODE_WIDTH, height: clampedHeight });
+    useStreamingStore.getState().setMeasuredHeight(id, clampedHeight);
+  }, [id, clampedHeight]);
 
-    // Update React Flow node dimensions — it will use this instead of measuring DOM
-    if (lastHeightRef.current !== clampedHeight) {
-      lastHeightRef.current = clampedHeight;
-      updateNodeDimensions(id, { height: clampedHeight });
-    }
-
-    // Store the height in streamingStore for other subscribers
-    if (streamState.measuredHeight !== clampedHeight) {
-      useStreamingStore.getState().setMeasuredHeight(id, clampedHeight);
-    }
-  }, [id, streamState?.text, streamState?.isStreaming, streamState?.measuredHeight, updateNodeDimensions]);
+  useLayoutEffect(() => {
+    if (!isStreaming || !containerRef.current) return;
+    const scrollViewport = Math.max(1, clampedHeight - PADDING_V);
+    const contentHeight = textBlockHeight + PRE_PADDING_V + CURSOR_SCROLL_EXTRA;
+    containerRef.current.scrollTop = Math.max(0, contentHeight - scrollViewport);
+  }, [isStreaming, textBlockHeight, clampedHeight]);
 
   // Evict Pretext cache when stream ends to free memory
   useEffect(() => {
@@ -75,13 +72,15 @@ const ThinkingStreamNodeInner = ({ id }: NodeProps<ThinkingStreamNodeData>) => {
     }
   }, [id, streamState?.isStreaming]);
 
-  const isStreaming = streamState?.isStreaming ?? false;
   const isThinking = streamState?.isThinking ?? true;
 
   return (
-    <div className="thinking-stream-node relative w-80 rounded-lg border border-neutral-700 bg-neutral-900 overflow-hidden">
+    <div
+      className="thinking-stream-node relative flex flex-col rounded-lg border border-neutral-700 bg-neutral-900 overflow-hidden"
+      style={{ width: NODE_WIDTH, height: clampedHeight }}
+    >
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-neutral-700 bg-neutral-800">
+      <div className="flex shrink-0 items-center gap-2 px-3 py-2 border-b border-neutral-700 bg-neutral-800">
         <div
           className={`w-2 h-2 rounded-full ${
             isStreaming ? "animate-pulse bg-violet-400" : "bg-neutral-500"
@@ -98,11 +97,7 @@ const ThinkingStreamNodeInner = ({ id }: NodeProps<ThinkingStreamNodeData>) => {
       </div>
 
       {/* Scrollable text container */}
-      <div
-        ref={containerRef}
-        className="overflow-y-auto"
-        style={{ maxHeight: MAX_HEIGHT - PADDING_V }}
-      >
+      <div ref={containerRef} className="min-h-0 flex-1 overflow-y-auto">
         <pre
           ref={textRef}
           className="p-3 text-xs leading-5 text-neutral-300 font-mono whitespace-pre-wrap break-words m-0"

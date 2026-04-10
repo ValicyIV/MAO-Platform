@@ -21,6 +21,8 @@ export const MemoryGraphCanvas = memo(() => {
   const setAgentFilter = useMemoryGraphStore((s) => s.setAgentFilter);
   const setSearchQuery = useMemoryGraphStore((s) => s.setSearchQuery);
   const toggleTemporal = useMemoryGraphStore((s) => s.toggleTemporal);
+  const onNodesChange = useMemoryGraphStore((s) => s.onNodesChange);
+  const onEdgesChange = useMemoryGraphStore((s) => s.onEdgesChange);
   const entities = useFilteredEntities();
 
   if (isLoading) {
@@ -76,9 +78,9 @@ export const MemoryGraphCanvas = memo(() => {
           edges={relationships}
           nodeTypes={memoryNodeTypes}
           edgeTypes={memoryEdgeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
           onNodeClick={(_, node) => setHighlighted(node.id)}
-          fitView
-          fitViewOptions={{ padding: 0.3 }}
           proOptions={{ hideAttribution: true }}
         >
           <Background gap={24} size={1} className="opacity-20" />

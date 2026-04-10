@@ -4,7 +4,7 @@
 
 import { create } from "zustand";
 import type { MemoryNodeData, MemoryEdgeData, MemoryDelta } from "@mao/shared-types";
-import type { Node, Edge } from "@xyflow/react";
+import { applyNodeChanges, applyEdgeChanges, type Node, type Edge, type NodeChange, type EdgeChange } from "@xyflow/react";
 
 interface MemoryGraphStore {
   entities: Node<MemoryNodeData>[];
@@ -28,6 +28,9 @@ interface MemoryGraphStore {
   setSearchQuery: (q: string) => void;
   toggleTemporal: () => void;
   setHighlightedEntity: (entityId: string | null) => void;
+
+  onNodesChange: (changes: NodeChange[]) => void;
+  onEdgesChange: (changes: EdgeChange[]) => void;
 
   reset: () => void;
 }
@@ -139,6 +142,16 @@ export const useMemoryGraphStore = create<MemoryGraphStore>()((set, get) => ({
   toggleTemporal: () => set((s) => ({ showTemporal: !s.showTemporal })),
 
   setHighlightedEntity: (entityId) => set({ highlightedEntityId: entityId }),
+
+  onNodesChange: (changes) =>
+    set((s) => ({
+      entities: applyNodeChanges(changes, s.entities) as Node<MemoryNodeData>[],
+    })),
+
+  onEdgesChange: (changes) =>
+    set((s) => ({
+      relationships: applyEdgeChanges(changes, s.relationships),
+    })),
 
   reset: () =>
     set({

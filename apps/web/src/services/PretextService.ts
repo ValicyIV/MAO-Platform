@@ -1,31 +1,30 @@
 // PretextService.ts — DOM-free text measurement (Pattern 12)
 //
-// Wraps @chenglou/pretext to eliminate layout thrashing during streaming.
-// prepare() is called once per text change (cached by accumulated length).
-// layout() is pure arithmetic — ~0.0002ms per call.
-//
-// The measured height is passed to React Flow's updateNode() so it skips
-// getBoundingClientRect() entirely for ThinkingStreamNodes.
+// Wraps @chenglou/pretext: prepare(text, font) once per distinct `text` per node,
+// then layout(handle, width, lineHeight) whenever width/lineHeight change.
+// No DOM measurement — graph node height comes from these numbers + updateNodeDimensions.
 
 import { prepare, layout } from "@chenglou/pretext";
 
 interface CacheEntry {
   handle: ReturnType<typeof prepare>;
-  textLength: number;
+  text: string;
 }
 
 class PretextServiceClass {
   private cache = new Map<string, CacheEntry>();
 
-  // Default typography constants — must match ThinkingStreamNode CSS
-  static readonly FONT = "14px Inter, ui-sans-serif, sans-serif";
-  static readonly LINE_HEIGHT = 20; // px
+  // Must match ThinkingStreamNode: text-xs (12px), leading-5 (20px), font-mono
+  static readonly FONT =
+    '12px/20px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace';
+  static readonly LINE_HEIGHT = 20; // px — Tailwind leading-5
   static readonly NODE_WIDTH = 320; // px default — overridden per node
+  /** Horizontal inset: Tailwind `p-3` (12px) left + right on the `<pre>`. */
+  static readonly TEXT_INSET_H = 24;
 
   /**
-   * Returns the measured height for the given text at the given container width.
-   * Calls prepare() only when text length has changed (cache key = nodeId).
-   * layout() always runs (pure arithmetic, negligible cost).
+   * Text block height at the given outer node width (inner width = nodeWidth − TEXT_INSET_H).
+   * prepare() only when `text` changed for this nodeId; layout() is pure arithmetic.
    */
   getHeight(
     nodeId: string,
@@ -38,15 +37,14 @@ class PretextServiceClass {
     const cached = this.cache.get(nodeId);
     let handle: ReturnType<typeof prepare>;
 
-    if (!cached || cached.textLength !== text.length) {
-      // prepare() is the expensive call (~1-5ms) — run only when length changes
+    if (!cached || cached.text !== text) {
       handle = prepare(text, PretextServiceClass.FONT);
-      this.cache.set(nodeId, { handle, textLength: text.length });
+      this.cache.set(nodeId, { handle, text });
     } else {
       handle = cached.handle;
     }
 
-    const innerWidth = nodeWidth - 32; // 16px padding each side
+    const innerWidth = Math.max(0, nodeWidth - PretextServiceClass.TEXT_INSET_H);
     const { height } = layout(handle, innerWidth, lineHeight);
     return height;
   }

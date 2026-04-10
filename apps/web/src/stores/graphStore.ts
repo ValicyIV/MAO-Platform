@@ -116,6 +116,9 @@ export const useGraphStore = create<GraphStore>()(
 
     onNodesChange: (changes) =>
       set((s) => {
+        // Controlled mode: apply all RF changes (including dimensions). Ignoring
+        // dimensions breaks ResizeObserver sync in @xyflow/react v12 and can
+        // trigger React #185 (maximum update depth).
         s.nodes = applyNodeChanges(changes, s.nodes) as Node<NodeDataUnion>[];
       }),
 
