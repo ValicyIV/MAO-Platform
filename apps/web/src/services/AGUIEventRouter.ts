@@ -19,6 +19,7 @@ import type { Node } from "@xyflow/react";
 // ── RAF token buffer ──────────────────────────────────────────────────────────
 
 type NodeId = string;
+const WORKFLOW_ROOT_ID = "__workflow_root__";
 
 function coerceAgentRole(role: string | undefined): AgentRole {
   if (!role) return AgentRole.Research;
@@ -99,6 +100,7 @@ export class AGUIEventRouter {
       // ── Lifecycle ────────────────────────────────────────────────────────────
       case "RUN_STARTED": {
         const ev = event as RunStartedEvent;
+        this._ensureWorkflowRoot(ev.runId ?? ev.workflowId ?? "workflow");
         statusStore.setStatus(ev.agentId, AgentStatus.Running);
         this._ensureSpecialistNode(ev);
         break;
@@ -114,6 +116,7 @@ export class AGUIEventRouter {
 
       // ── Steps ────────────────────────────────────────────────────────────────
       case "STEP_STARTED":
+        this._ensureWorkflowRoot(event.runId);
         this._ensureAgentShell(event.agentId);
         statusStore.setProgress(event.agentId, 50, event.stepName);
         this._ensureStepNode(event.stepId, event.agentId, event.stepType, event.stepName);
@@ -125,6 +128,7 @@ export class AGUIEventRouter {
 
       // ── Text streaming — buffer, don't dispatch per token ────────────────────
       case "TEXT_MESSAGE_START":
+        this._ensureWorkflowRoot(event.runId);
         this._ensureAgentShell(event.agentId);
         streamingStore.startStream(
           event.nodeId,
@@ -148,6 +152,7 @@ export class AGUIEventRouter {
 
       // ── Tool calls ───────────────────────────────────────────────────────────
       case "TOOL_CALL_START":
+        this._ensureWorkflowRoot(event.runId);
         this._ensureAgentShell(event.agentId);
         this._ensureToolCallNode(event.toolCallId, event.nodeId, event.agentId, event.toolName);
         break;
@@ -249,6 +254,28 @@ export class AGUIEventRouter {
 
   // ── Node creation helpers ────────────────────────────────────────────────────
 
+  private _ensureWorkflowRoot(workflowId: string): void {
+    const { nodes, addNode } = useGraphStore.getState();
+    if (nodes.find((n) => n.id === WORKFLOW_ROOT_ID)) return;
+    const node: Node<NodeDataUnion> = {
+      id: WORKFLOW_ROOT_ID,
+      type: NodeType.Orchestrator,
+      position: { x: 0, y: 0 },
+      data: {
+        level: NodeLevel.Orchestrator,
+        workflowId: workflowId || "workflow",
+        workflowName: "MAO Workflow",
+        status: AgentStatus.Running,
+        agentCount: 0,
+        totalTokens: 0,
+        expanded: true,
+        startedAt: Date.now(),
+      },
+    };
+    addNode(node);
+    useGraphStore.getState().bumpLayout();
+  }
+
   private _ensureSpecialistNode(ev: RunStartedEvent): void {
     const { agentId, agentName, role, model, tools } = ev;
     const { nodes, addNode } = useGraphStore.getState();
@@ -267,11 +294,21 @@ export class AGUIEventRouter {
         tools: tools ?? [],
         status: AgentStatus.Running,
         tokenCount: 0,
-        expanded: false,
+        expanded: true,
         currentStep: null,
       },
     };
     addNode(node);
+    useGraphStore.getState().addEdge({
+      id: `${WORKFLOW_ROOT_ID}-${agentId}`,
+      source: WORKFLOW_ROOT_ID,
+      target: agentId,
+      type: "agentFlow",
+      hidden: false,
+    });
+    useGraphStore.getState().updateNodeData(WORKFLOW_ROOT_ID, {
+      agentCount: useGraphStore.getState().nodes.filter((n) => n.type === NodeType.Specialist).length,
+    } as Partial<NodeDataUnion>);
     useGraphStore.getState().bumpLayout();
   }
 
@@ -303,14 +340,12 @@ export class AGUIEventRouter {
   private _ensureStepNode(stepId: string, agentId: string, stepType: string, stepName: string): void {
     const { nodes, addNode, addEdge } = useGraphStore.getState();
     if (nodes.find((n) => n.id === stepId)) return;
-    const hasParent = nodes.some((n) => n.id === agentId);
 
     const node: Node<NodeDataUnion> = {
       id: stepId,
       type: NodeType.ExecutionStep,
       position: { x: 0, y: 0 },
-      hidden: hasParent, // keep visible if parent is missing to avoid "nothing renders"
-      parentId: agentId,
+      hidden: false,
       data: {
         level: NodeLevel.ExecutionStep,
         stepId,
@@ -331,7 +366,7 @@ export class AGUIEventRouter {
       source: agentId,
       target: stepId,
       type: "agentFlow",
-      hidden: hasParent,
+      hidden: false,
     });
     useGraphStore.getState().bumpLayout();
   }
@@ -339,14 +374,12 @@ export class AGUIEventRouter {
   private _ensureThinkingNode(nodeId: string, parentStepId: string, agentId: string): void {
     const { nodes, addNode, addEdge } = useGraphStore.getState();
     if (nodes.find((n) => n.id === nodeId)) return;
-    const hasParent = nodes.some((n) => n.id === parentStepId);
 
     const node: Node<NodeDataUnion> = {
       id: nodeId,
       type: NodeType.ThinkingStream,
       position: { x: 0, y: 0 },
-      hidden: hasParent,
-      parentId: parentStepId,
+      hidden: false,
       data: {
         level: NodeLevel.ThinkingStream,
         stepId: parentStepId,
@@ -362,7 +395,7 @@ export class AGUIEventRouter {
       source: parentStepId,
       target: nodeId,
       type: "agentFlow",
-      hidden: hasParent,
+      hidden: false,
     });
     useGraphStore.getState().bumpLayout();
   }
@@ -375,14 +408,12 @@ export class AGUIEventRouter {
   ): void {
     const { nodes, addNode, addEdge } = useGraphStore.getState();
     if (nodes.find((n) => n.id === nodeId)) return;
-    const hasParent = nodes.some((n) => n.id === agentId);
 
     const node: Node<NodeDataUnion> = {
       id: nodeId,
       type: NodeType.ToolCall,
       position: { x: 0, y: 0 },
-      hidden: hasParent,
-      parentId: agentId,
+      hidden: false,
       data: {
         level: NodeLevel.ExecutionStep,
         stepId: toolCallId,
@@ -403,7 +434,7 @@ export class AGUIEventRouter {
       source: agentId,
       target: nodeId,
       type: "toolCall",
-      hidden: hasParent,
+      hidden: false,
     });
     useGraphStore.getState().bumpLayout();
   }
