@@ -21,6 +21,7 @@ from typing import Any
 import structlog
 
 log = structlog.get_logger(__name__)
+_KNOWN_AGENT_IDS = ("research", "code", "data", "writer", "supervisor", "verifier", "orchestrator")
 
 # Map LangGraph callback event names → AG-UI step types
 _STEP_TYPE_MAP = {
@@ -58,7 +59,7 @@ class StreamPartMapper:
         Returns a list (most events produce 1, some produce 0 or 2).
         """
         part_type = stream_part.get("event", stream_part.get("type", ""))
-        data = stream_part.get("data", stream_part)
+        data = self._as_dict(stream_part.get("data", stream_part))
         ts = int(time.time() * 1000)
 
         events: list[dict[str, Any]] = []
@@ -66,7 +67,7 @@ class StreamPartMapper:
         # ── Text / thinking token streaming ───────────────────────────────────
         if part_type == "on_chat_model_stream":
             chunk = data.get("chunk", {})
-            content = chunk.get("content", "")
+            content = self._extract_chunk_content(chunk)
             agent_id = self._get_agent_id(data)
 
             # Ensure RUN_STARTED has been emitted for this agent
@@ -77,13 +78,14 @@ class StreamPartMapper:
                 # for claude-* models. Other providers (OpenRouter, Ollama) emit
                 # plain text strings, handled by the elif branch below.
                 for block in content:
-                    if block.get("type") == "thinking":
-                        delta = block.get("thinking", "")
+                    b = self._as_dict(block)
+                    if b.get("type") == "thinking":
+                        delta = str(b.get("thinking", "") or "")
                         if delta:
                             events.extend(self._maybe_emit_text_start(data, ts, is_thinking=True))
                             events.append(self._thinking_delta_event(data, delta, ts))
-                    elif block.get("type") == "text":
-                        delta = block.get("text", "")
+                    elif b.get("type") == "text":
+                        delta = str(b.get("text", "") or "")
                         if delta:
                             events.extend(self._maybe_emit_text_start(data, ts, is_thinking=False))
                             events.append(self._text_content_event(data, delta, ts))
@@ -355,10 +357,85 @@ class StreamPartMapper:
         }]
 
     def _get_agent_id(self, data: dict[str, Any]) -> str:
-        # Try to extract the agent name from LangGraph metadata
-        metadata = data.get("metadata", {})
-        tags = data.get("tags", [])
+        # Try to extract the agent name from LangGraph metadata with robust fallbacks.
+        metadata = self._as_dict(data.get("metadata", {}))
+
+        raw_tags = data.get("tags", [])
+        if isinstance(raw_tags, str):
+            tags = [raw_tags]
+        elif isinstance(raw_tags, (list, tuple, set)):
+            tags = [str(t) for t in raw_tags if t is not None]
+        else:
+            tags = []
+
         for tag in tags:
-            if tag in ("research", "code", "data", "writer", "supervisor", "verifier"):
-                return tag
-        return metadata.get("langgraph_node", "unknown")
+            t = tag.strip().lower()
+            if t in _KNOWN_AGENT_IDS:
+                return "supervisor" if t == "orchestrator" else t
+
+        candidates = [
+            data.get("agent_id"),
+            data.get("agent"),
+            data.get("name"),
+            data.get("run_name"),
+            metadata.get("langgraph_node"),
+            metadata.get("agent_id"),
+            metadata.get("name"),
+            metadata.get("node_name"),
+        ]
+        for candidate in candidates:
+            if not candidate:
+                continue
+            c = str(candidate).strip().lower().replace("-", "_").replace(" ", "_")
+            for known in _KNOWN_AGENT_IDS:
+                if c == known or c.startswith(f"{known}_") or c.endswith(f"_{known}") or f"_{known}_" in c:
+                    return "supervisor" if known == "orchestrator" else known
+
+        return "unknown"
+
+    def _as_dict(self, value: Any) -> dict[str, Any]:
+        """Best-effort normalize LangGraph payload/chunk objects to dict."""
+        if isinstance(value, dict):
+            return value
+        if value is None:
+            return {}
+        # Pydantic v2
+        if hasattr(value, "model_dump"):
+            try:
+                dumped = value.model_dump()  # type: ignore[attr-defined]
+                if isinstance(dumped, dict):
+                    return dumped
+            except Exception:
+                pass
+        # Pydantic v1
+        if hasattr(value, "dict"):
+            try:
+                dumped = value.dict()  # type: ignore[attr-defined]
+                if isinstance(dumped, dict):
+                    return dumped
+            except Exception:
+                pass
+        # Dataclass / generic python object
+        if hasattr(value, "__dict__"):
+            try:
+                obj = dict(vars(value))
+                if isinstance(obj, dict):
+                    return obj
+            except Exception:
+                pass
+        return {}
+
+    def _extract_chunk_content(self, chunk: Any) -> Any:
+        """
+        Support dict and object chunks (e.g., AIMessageChunk) from LangGraph streams.
+        Returns either list[blocks], plain text, or "".
+        """
+        chunk_dict = self._as_dict(chunk)
+        if "content" in chunk_dict:
+            return chunk_dict.get("content", "")
+        if hasattr(chunk, "content"):
+            try:
+                return getattr(chunk, "content")
+            except Exception:
+                return ""
+        return ""

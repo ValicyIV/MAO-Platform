@@ -147,7 +147,8 @@ def _code_defaults() -> dict[str, dict[str, Any]]:
     )
     return {
         "supervisor": {
-            "name": "Supervisor", "role": "orchestrator", "emoji": "🧭",
+            # Must match get_prompt() keys (supervisor), not UI "orchestrator" wording.
+            "name": "Supervisor", "role": "supervisor", "emoji": "🧭",
             "model": supervisor_model,
             "description": "Plans and delegates tasks to specialist agents.",
             "temperature": 1.0, "thinking_enabled": True,
@@ -371,7 +372,8 @@ async def build_agents() -> dict[str, Any]:
     # Role → default tool set for built-in agents
     role_tools: dict[str, list] = {
         "research":     [web_search_tool, fetch_url, arxiv_tool] + memory_tools,
-        "orchestrator": [],
+        "supervisor":   [],
+        "orchestrator": [],  # alias if agents.json still uses role "orchestrator"
         "code":         [python_repl_tool, bash_tool, read_file_tool, write_file_tool] + memory_tools,
         "data":         [python_repl_tool, read_file_tool, write_file_tool] + memory_tools,
         "writer":       [read_file_tool, write_file_tool, format_markdown_tool],

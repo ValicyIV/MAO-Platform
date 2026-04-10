@@ -39,8 +39,10 @@ export function Toolbar({ viewMode, onViewModeChange, workflowId, onWorkflowStar
       <div className="flex rounded-md border border-neutral-700 overflow-hidden text-xs">
         <button
           onClick={() => onViewModeChange("workflow")}
-          className={`px-3 py-1.5 transition-colors ${
-            viewMode === "workflow" ? "bg-blue-600 text-white" : "text-neutral-400 hover:text-neutral-200"
+          className={`px-3 py-1.5 border-r border-neutral-700 transition-colors ${
+            viewMode === "workflow"
+              ? "bg-blue-600 text-white"
+              : "bg-neutral-900 text-neutral-200 hover:bg-neutral-800"
           }`}
         >
           Workflow
@@ -51,7 +53,9 @@ export function Toolbar({ viewMode, onViewModeChange, workflowId, onWorkflowStar
             useMemoryGraphStore.getState().fetchGraph();
           }}
           className={`px-3 py-1.5 transition-colors ${
-            viewMode === "memory" ? "bg-violet-600 text-white" : "text-neutral-400 hover:text-neutral-200"
+            viewMode === "memory"
+              ? "bg-violet-600 text-white"
+              : "bg-neutral-900 text-neutral-200 hover:bg-neutral-800"
           }`}
         >
           Memory
@@ -65,6 +69,8 @@ export function Toolbar({ viewMode, onViewModeChange, workflowId, onWorkflowStar
 
       {/* Task input */}
       <input
+        id="workflow-task-input"
+        name="workflowTask"
         type="text"
         value={task}
         onChange={(e) => setTask(e.target.value)}
@@ -76,7 +82,7 @@ export function Toolbar({ viewMode, onViewModeChange, workflowId, onWorkflowStar
       {/* Config button */}
       <button
         onClick={() => setShowConfig(true)}
-        className="px-3 py-1.5 rounded-md text-sm border border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:border-neutral-500 transition-colors"
+        className="px-3 py-1.5 rounded-md text-sm border border-neutral-600 bg-neutral-900 text-neutral-100 hover:bg-neutral-800 transition-colors"
         title="Configure agent models"
       >
         ⚙ Agents
@@ -108,7 +114,7 @@ export function Toolbar({ viewMode, onViewModeChange, workflowId, onWorkflowStar
       {/* Reset */}
       <button
         onClick={() => { resetGraph(); setTask(""); }}
-        className="text-xs text-neutral-600 hover:text-neutral-400 transition-colors"
+        className="text-xs px-2 py-1 rounded border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800 transition-colors"
       >
         Clear
       </button>

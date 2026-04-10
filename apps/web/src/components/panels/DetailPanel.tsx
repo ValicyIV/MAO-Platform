@@ -2,12 +2,14 @@
 // Shows model provenance info for SpecialistNodes.
 
 import { useSelectedNode } from "@/stores/selectors/graphSelectors";
+import { useGraphStore } from "@/stores/graphStore";
 import { NodeLevel } from "@mao/shared-types";
 import type { SpecialistNodeData } from "@mao/shared-types";
 import { modelDisplayName, providerLabel, modelBadgeClasses, detectProvider } from "@/utils/modelUtils";
 
 export function DetailPanel() {
-  const { id, node } = useSelectedNode();
+  const id = useGraphStore((s) => s.selectedNodeId);
+  const node = useSelectedNode();
 
   if (!id || !node) {
     return (

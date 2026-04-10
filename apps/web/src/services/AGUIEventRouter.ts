@@ -25,6 +25,7 @@ function coerceAgentRole(role: string | undefined): AgentRole {
   const lc = role.toLowerCase();
   const map: Record<string, AgentRole> = {
     orchestrator: AgentRole.Orchestrator,
+    supervisor: AgentRole.Orchestrator,
     research: AgentRole.Research,
     code: AgentRole.Code,
     data: AgentRole.Data,
@@ -113,6 +114,7 @@ export class AGUIEventRouter {
 
       // ── Steps ────────────────────────────────────────────────────────────────
       case "STEP_STARTED":
+        this._ensureAgentShell(event.agentId);
         statusStore.setProgress(event.agentId, 50, event.stepName);
         this._ensureStepNode(event.stepId, event.agentId, event.stepType, event.stepName);
         break;
@@ -123,6 +125,7 @@ export class AGUIEventRouter {
 
       // ── Text streaming — buffer, don't dispatch per token ────────────────────
       case "TEXT_MESSAGE_START":
+        this._ensureAgentShell(event.agentId);
         streamingStore.startStream(
           event.nodeId,
           event.agentId,
@@ -145,6 +148,7 @@ export class AGUIEventRouter {
 
       // ── Tool calls ───────────────────────────────────────────────────────────
       case "TOOL_CALL_START":
+        this._ensureAgentShell(event.agentId);
         this._ensureToolCallNode(event.toolCallId, event.nodeId, event.agentId, event.toolName);
         break;
 
@@ -271,15 +275,41 @@ export class AGUIEventRouter {
     useGraphStore.getState().bumpLayout();
   }
 
+  private _ensureAgentShell(agentId: string): void {
+    const normalized = (agentId || "unknown").trim() || "unknown";
+    const { nodes, addNode } = useGraphStore.getState();
+    if (nodes.find((n) => n.id === normalized)) return;
+    const node: Node<NodeDataUnion> = {
+      id: normalized,
+      type: NodeType.Specialist,
+      position: { x: 0, y: 0 },
+      data: {
+        level: NodeLevel.Specialist,
+        agentId: normalized,
+        agentName: normalized === "unknown" ? "Agent" : normalized,
+        role: coerceAgentRole(normalized),
+        model: "unknown" as any,
+        tools: [],
+        status: AgentStatus.Running,
+        tokenCount: 0,
+        expanded: true,
+        currentStep: null,
+      },
+    };
+    addNode(node);
+    useGraphStore.getState().bumpLayout();
+  }
+
   private _ensureStepNode(stepId: string, agentId: string, stepType: string, stepName: string): void {
     const { nodes, addNode, addEdge } = useGraphStore.getState();
     if (nodes.find((n) => n.id === stepId)) return;
+    const hasParent = nodes.some((n) => n.id === agentId);
 
     const node: Node<NodeDataUnion> = {
       id: stepId,
       type: NodeType.ExecutionStep,
       position: { x: 0, y: 0 },
-      hidden: true, // hidden until parent is expanded
+      hidden: hasParent, // keep visible if parent is missing to avoid "nothing renders"
       parentId: agentId,
       data: {
         level: NodeLevel.ExecutionStep,
@@ -301,7 +331,7 @@ export class AGUIEventRouter {
       source: agentId,
       target: stepId,
       type: "agentFlow",
-      hidden: true,
+      hidden: hasParent,
     });
     useGraphStore.getState().bumpLayout();
   }
@@ -309,12 +339,13 @@ export class AGUIEventRouter {
   private _ensureThinkingNode(nodeId: string, parentStepId: string, agentId: string): void {
     const { nodes, addNode, addEdge } = useGraphStore.getState();
     if (nodes.find((n) => n.id === nodeId)) return;
+    const hasParent = nodes.some((n) => n.id === parentStepId);
 
     const node: Node<NodeDataUnion> = {
       id: nodeId,
       type: NodeType.ThinkingStream,
       position: { x: 0, y: 0 },
-      hidden: true,
+      hidden: hasParent,
       parentId: parentStepId,
       data: {
         level: NodeLevel.ThinkingStream,
@@ -331,7 +362,7 @@ export class AGUIEventRouter {
       source: parentStepId,
       target: nodeId,
       type: "agentFlow",
-      hidden: true,
+      hidden: hasParent,
     });
     useGraphStore.getState().bumpLayout();
   }
@@ -344,12 +375,13 @@ export class AGUIEventRouter {
   ): void {
     const { nodes, addNode, addEdge } = useGraphStore.getState();
     if (nodes.find((n) => n.id === nodeId)) return;
+    const hasParent = nodes.some((n) => n.id === agentId);
 
     const node: Node<NodeDataUnion> = {
       id: nodeId,
       type: NodeType.ToolCall,
       position: { x: 0, y: 0 },
-      hidden: true,
+      hidden: hasParent,
       parentId: agentId,
       data: {
         level: NodeLevel.ExecutionStep,
@@ -371,7 +403,7 @@ export class AGUIEventRouter {
       source: agentId,
       target: nodeId,
       type: "toolCall",
-      hidden: true,
+      hidden: hasParent,
     });
     useGraphStore.getState().bumpLayout();
   }

@@ -227,6 +227,15 @@ _PROMPTS: dict[str, tuple[str, str]] = {
     "consolidation": (CONSOLIDATION_STATIC, CONSOLIDATION_DYNAMIC),
 }
 
+# Semantic aliases → _PROMPTS key (registry historically used "orchestrator" for the supervisor).
+_PROMPT_ROLE_ALIASES: dict[str, str] = {
+    "orchestrator": "supervisor",
+}
+
+
+def _resolve_prompt_role(agent_role: str) -> str:
+    return _PROMPT_ROLE_ALIASES.get(agent_role, agent_role)
+
 
 def get_prompt(agent_role: str, **dynamic_vars: str) -> str:
     """
@@ -238,6 +247,7 @@ def get_prompt(agent_role: str, **dynamic_vars: str) -> str:
     Example:
         prompt = get_prompt("research", task="summarise GPT-4", memory_context="...")
     """
+    agent_role = _resolve_prompt_role(agent_role)
     if agent_role not in _PROMPTS:
         raise ValueError(f"Unknown agent role: {agent_role!r}. Valid: {list(_PROMPTS)}")
     static, dynamic = _PROMPTS[agent_role]
@@ -250,6 +260,7 @@ def get_prompt(agent_role: str, **dynamic_vars: str) -> str:
 
 def get_static_prompt(agent_role: str) -> str:
     """Return only the static (cacheable) portion of a prompt."""
+    agent_role = _resolve_prompt_role(agent_role)
     if agent_role not in _PROMPTS:
         raise ValueError(f"Unknown agent role: {agent_role!r}")
     return _PROMPTS[agent_role][0]

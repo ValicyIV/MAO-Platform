@@ -23,6 +23,7 @@ log = structlog.get_logger(__name__)
 # ── Server permission map ─────────────────────────────────────────────────────
 
 AGENT_TOOL_PERMISSIONS: dict[str, list[str]] = {
+    "supervisor": [],
     "orchestrator": [],
     "research":     ["filesystem_read", "github_search"],
     "code":         ["filesystem_read", "filesystem_write", "github_search", "github_repo"],

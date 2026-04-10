@@ -1,15 +1,15 @@
-// FlowCanvas.tsx — ⚡ DRIVER: React Flow graph wrapper.
+﻿// FlowCanvas.tsx ΓÇö ΓÜí DRIVER: React Flow graph wrapper.
 // Wires nodeTypes, edgeTypes, graphStore, and ELK layout.
 // Switches between workflow graph and memory graph based on viewMode.
 
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
 import {
   ReactFlow,
   Background,
   Controls,
   MiniMap,
-  type NodeChange,
-  type EdgeChange,
+  type NodeTypes,
+  type EdgeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -45,21 +45,22 @@ const edgeTypes = {
   handoff: HandoffEdge,
 };
 
+const workflowNodeTypes = nodeTypes as unknown as NodeTypes;
+const workflowEdgeTypes = edgeTypes as unknown as EdgeTypes;
+
 interface FlowCanvasProps {
   viewMode: ViewMode;
 }
 
 export default function FlowCanvas({ viewMode }: FlowCanvasProps) {
-  const onNodesChange = useGraphStore((s) => s.onNodesChange);
-  const onEdgesChange = useGraphStore((s) => s.onEdgesChange);
   const setSelectedNodeId = useGraphStore((s) => s.setSelectedNodeId);
   const layoutVersion = useGraphStore((s) => s.layoutVersion);
 
   const nodes = useVisibleNodes();
   const edges = useVisibleEdges();
 
-  // Auto-layout via ELK — runs when layoutVersion changes
-  useAutoLayout(layoutVersion);
+  // Auto-layout via ELK ΓÇö runs when layoutVersion changes (workflow canvas only)
+  useAutoLayout(layoutVersion, viewMode !== "memory");
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: { id: string }) => {
@@ -77,11 +78,12 @@ export default function FlowCanvas({ viewMode }: FlowCanvasProps) {
     <ReactFlow
       nodes={nodes}
       edges={edges}
-      nodeTypes={nodeTypes}
-      edgeTypes={edgeTypes}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
+      nodeTypes={workflowNodeTypes}
+      edgeTypes={workflowEdgeTypes}
       onNodeClick={onNodeClick}
+      nodesDraggable={false}
+      nodesConnectable={false}
+      elementsSelectable
       minZoom={0.1}
       maxZoom={2}
       proOptions={{ hideAttribution: true }}

@@ -1,9 +1,9 @@
-// MemoryGraphCanvas.tsx — ⚡ DRIVER: Fifth view mode (Pattern 16)
-// Separate ReactFlow instance from FlowCanvas — completely decoupled from graphStore.
+﻿// MemoryGraphCanvas.tsx ΓÇö ΓÜí DRIVER: Fifth view mode (Pattern 16)
+// Separate ReactFlow instance from FlowCanvas ΓÇö completely decoupled from graphStore.
 // Shows the Obsidian-style knowledge graph from memoryGraphStore.
 
-import { memo } from "react";
-import { ReactFlow, Background, Controls, MiniMap } from "@xyflow/react";
+import { memo, useMemo } from "react";
+import { ReactFlow, Background, Controls, MiniMap, type NodeTypes, type EdgeTypes } from "@xyflow/react";
 import { useMemoryGraphStore } from "@/stores/memoryGraphStore";
 import { useFilteredEntities } from "@/stores/selectors/memorySelectors";
 import { EntityNode } from "./EntityNode";
@@ -11,6 +11,8 @@ import { RelationshipEdge } from "./RelationshipEdge";
 
 const memoryNodeTypes = { memoryEntity: EntityNode };
 const memoryEdgeTypes = { memoryRelationship: RelationshipEdge };
+const memoryNodeTypesRf = memoryNodeTypes as unknown as NodeTypes;
+const memoryEdgeTypesRf = memoryEdgeTypes as unknown as EdgeTypes;
 
 export const MemoryGraphCanvas = memo(() => {
   const isLoading = useMemoryGraphStore((s) => s.isLoading);
@@ -25,14 +27,16 @@ export const MemoryGraphCanvas = memo(() => {
   const setAgentFilter = useMemoryGraphStore((s) => s.setAgentFilter);
   const setSearchQuery = useMemoryGraphStore((s) => s.setSearchQuery);
   const toggleTemporal = useMemoryGraphStore((s) => s.toggleTemporal);
-  const onNodesChange = useMemoryGraphStore((s) => s.onNodesChange);
-  const onEdgesChange = useMemoryGraphStore((s) => s.onEdgesChange);
   const entities = useFilteredEntities();
+  const visibleEdges = useMemo(() => {
+    const ids = new Set(entities.map((e) => e.id));
+    return relationships.filter((e) => ids.has(e.source) && ids.has(e.target));
+  }, [entities, relationships]);
 
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center text-neutral-500 text-sm">
-        Loading knowledge graph…
+        Loading knowledge graphΓÇª
       </div>
     );
   }
@@ -44,7 +48,7 @@ export const MemoryGraphCanvas = memo(() => {
         <button
           type="button"
           onClick={() => fetchGraph(activeAgentFilter ?? undefined)}
-          className="px-3 py-1.5 rounded-md border border-neutral-600 text-neutral-200 hover:bg-neutral-800"
+          className="px-3 py-1.5 rounded-md border border-neutral-500 bg-neutral-900 text-neutral-100 hover:bg-neutral-800"
         >
           Retry
         </button>
@@ -63,7 +67,7 @@ export const MemoryGraphCanvas = memo(() => {
               setSearchQuery("");
               setAgentFilter(null);
             }}
-            className="text-xs px-3 py-1.5 rounded-md border border-neutral-600 text-neutral-300 hover:bg-neutral-800"
+            className="text-xs px-3 py-1.5 rounded-md border border-neutral-500 bg-neutral-900 text-neutral-100 hover:bg-neutral-800"
           >
             Clear search and filters
           </button>
@@ -86,7 +90,7 @@ export const MemoryGraphCanvas = memo(() => {
           <button
             type="button"
             onClick={() => fetchGraph(activeAgentFilter ?? undefined)}
-            className="shrink-0 px-2 py-1 rounded border border-amber-700/60 hover:bg-amber-900/30"
+            className="shrink-0 px-2 py-1 rounded border border-amber-500/70 bg-amber-900/20 text-amber-100 hover:bg-amber-900/35"
           >
             Retry
           </button>
@@ -95,15 +99,17 @@ export const MemoryGraphCanvas = memo(() => {
       {/* Memory graph toolbar */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-neutral-800 bg-neutral-950 text-xs">
         <input
+          id="memory-search-input"
+          name="memorySearch"
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search entities…"
+          placeholder="Search entitiesΓÇª"
           className="w-48 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-neutral-300 placeholder-neutral-600 focus:outline-none focus:border-violet-500"
         />
         <button
           onClick={() => setAgentFilter(null)}
-          className="px-2 py-1 rounded border border-neutral-700 text-neutral-400 hover:text-neutral-200"
+          className="px-2 py-1 rounded border border-neutral-600 bg-neutral-900 text-neutral-100 hover:bg-neutral-800"
         >
           All agents
         </button>
@@ -123,12 +129,13 @@ export const MemoryGraphCanvas = memo(() => {
       <div className="flex-1">
         <ReactFlow
           nodes={entities}
-          edges={relationships}
-          nodeTypes={memoryNodeTypes}
-          edgeTypes={memoryEdgeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
+          edges={visibleEdges}
+          nodeTypes={memoryNodeTypesRf}
+          edgeTypes={memoryEdgeTypesRf}
           onNodeClick={(_, node) => setHighlighted(node.id)}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable
           proOptions={{ hideAttribution: true }}
         >
           <Background gap={24} size={1} className="opacity-20" />

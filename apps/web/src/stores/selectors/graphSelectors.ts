@@ -22,7 +22,7 @@ export const useIsExpanded = (id: string) =>
   useGraphStore((s) => s.expandedIds.has(id));
 
 export const useSelectedNode = () =>
-  useGraphStore((s) => ({
-    id: s.selectedNodeId,
-    node: s.nodes.find((n) => n.id === s.selectedNodeId),
-  }));
+  useGraphStore((s) => {
+    const id = s.selectedNodeId;
+    return id ? s.nodes.find((n) => n.id === id) ?? null : null;
+  });

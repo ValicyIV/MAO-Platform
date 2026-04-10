@@ -27,3 +27,25 @@ html, body, #root {
 
 /* bg-neutral-850 utility (between 800 and 900) */
 .bg-neutral-850 { background-color: #1c1c1e; }
+
+/* React Flow controls (bottom-left) contrast in dark theme */
+.react-flow__controls {
+  border: 1px solid #52525b !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.react-flow__controls-button {
+  background: #111827 !important;
+  color: #f5f5f5 !important;
+  border-bottom: 1px solid #3f3f46 !important;
+}
+
+.react-flow__controls-button:hover {
+  background: #1f2937 !important;
+}
+
+.react-flow__controls-button svg {
+  fill: #f5f5f5 !important;
+}
