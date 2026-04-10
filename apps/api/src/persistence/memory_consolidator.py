@@ -214,4 +214,7 @@ class MemoryConsolidator:
 
         return patterns
 
-    
+
+# Singleton used by scheduler — import as `memory_consolidator` or `consolidator`.
+memory_consolidator = MemoryConsolidator()
+consolidator = memory_consolidator
