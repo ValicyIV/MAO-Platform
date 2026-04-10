@@ -68,15 +68,29 @@ async def create_workflow(body: WorkflowCreate) -> WorkflowResponse:
 
 @router.get("/workflows/{workflow_id}", response_model=WorkflowStatus, summary="Get workflow status")
 async def get_workflow(workflow_id: str) -> WorkflowStatus:
-    # TODO: pull from Redis/checkpointer in Phase 6
+    from src.streaming.websocket import connection_manager
+
+    snap = connection_manager.get_workflow_snapshot(workflow_id)
+    if not snap:
+        return WorkflowStatus(
+            workflow_id=workflow_id,
+            status="unknown",
+            started_at=None,
+            finished_at=None,
+            total_tokens=0,
+            agents_involved=[],
+            error=None,
+        )
     return WorkflowStatus(
         workflow_id=workflow_id,
-        status="unknown",
-        started_at=None,
-        finished_at=None,
-        total_tokens=0,
-        agents_involved=[],
-        error=None,
+        status=snap["status"],
+        started_at=datetime.fromtimestamp(snap["started_at"], tz=timezone.utc),
+        finished_at=datetime.fromtimestamp(snap["finished_at"], tz=timezone.utc)
+        if snap.get("finished_at")
+        else None,
+        total_tokens=int(snap.get("total_tokens") or 0),
+        agents_involved=list(snap.get("agents_involved") or []),
+        error=snap.get("error"),
     )
 
 

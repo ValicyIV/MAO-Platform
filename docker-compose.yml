@@ -104,9 +104,7 @@ services:
     ports:
       - "5173:80"
     restart: on-failure
-    environment:
-      VITE_API_URL: http://localhost:8000
-      VITE_WS_URL: ws://localhost:8000
+    # No VITE_* needed: the bundle calls /api and ws(s)://<same host>/ws (nginx proxies to api:8000).
     depends_on:
       api:
         condition: service_healthy

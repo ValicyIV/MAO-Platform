@@ -14,6 +14,10 @@ const memoryEdgeTypes = { memoryRelationship: RelationshipEdge };
 
 export const MemoryGraphCanvas = memo(() => {
   const isLoading = useMemoryGraphStore((s) => s.isLoading);
+  const lastFetchError = useMemoryGraphStore((s) => s.lastFetchError);
+  const entityCount = useMemoryGraphStore((s) => s.entities.length);
+  const fetchGraph = useMemoryGraphStore((s) => s.fetchGraph);
+  const activeAgentFilter = useMemoryGraphStore((s) => s.activeAgentFilter);
   const relationships = useMemoryGraphStore((s) => s.relationships);
   const searchQuery = useMemoryGraphStore((s) => s.searchQuery);
   const showTemporal = useMemoryGraphStore((s) => s.showTemporal);
@@ -33,7 +37,39 @@ export const MemoryGraphCanvas = memo(() => {
     );
   }
 
+  if (lastFetchError && entityCount === 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 text-center text-sm text-neutral-400 max-w-lg mx-auto">
+        <p className="text-red-400/90">{lastFetchError}</p>
+        <button
+          type="button"
+          onClick={() => fetchGraph(activeAgentFilter ?? undefined)}
+          className="px-3 py-1.5 rounded-md border border-neutral-600 text-neutral-200 hover:bg-neutral-800"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   if (entities.length === 0) {
+    if (entityCount > 0) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-neutral-500 text-sm px-6 text-center">
+          <span>No entities match your search or filters.</span>
+          <button
+            type="button"
+            onClick={() => {
+              setSearchQuery("");
+              setAgentFilter(null);
+            }}
+            className="text-xs px-3 py-1.5 rounded-md border border-neutral-600 text-neutral-300 hover:bg-neutral-800"
+          >
+            Clear search and filters
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-2 text-neutral-500 text-sm">
         <span>No memory entities yet.</span>
@@ -44,6 +80,18 @@ export const MemoryGraphCanvas = memo(() => {
 
   return (
     <div className="flex-1 relative flex flex-col">
+      {lastFetchError && (
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-amber-900/50 bg-amber-950/40 text-xs text-amber-200/90">
+          <span className="flex-1">{lastFetchError}</span>
+          <button
+            type="button"
+            onClick={() => fetchGraph(activeAgentFilter ?? undefined)}
+            className="shrink-0 px-2 py-1 rounded border border-amber-700/60 hover:bg-amber-900/30"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       {/* Memory graph toolbar */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-neutral-800 bg-neutral-950 text-xs">
         <input

@@ -5,7 +5,18 @@
 import type { ServerMessage, ClientMessage } from "@mao/shared-types";
 import { AGUIEventRouter } from "./AGUIEventRouter";
 
-const WS_BASE = import.meta.env.VITE_WS_URL ?? "ws://localhost:8000";
+/** WebSocket origin: explicit VITE_WS_URL, else same host as the page (Docker nginx / Vite proxy). */
+function websocketBaseUrl(): string {
+  const env = import.meta.env.VITE_WS_URL;
+  if (typeof env === "string" && env.length > 0) {
+    return env.replace(/\/$/, "");
+  }
+  if (typeof window !== "undefined") {
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${proto}//${window.location.host}`;
+  }
+  return "ws://localhost:8000";
+}
 
 // Reconnect backoff: 1s, 2s, 4s, 8s, 16s, 30s (capped)
 const BACKOFF_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
@@ -18,7 +29,7 @@ export class WebSocketService {
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingTask: string | null = null;
-  private router = new AGUIEventRouter();
+  private router: AGUIEventRouter = new AGUIEventRouter();
 
   static getInstance(): WebSocketService {
     if (!WebSocketService._instance) {
@@ -31,6 +42,8 @@ export class WebSocketService {
     if (this.ws?.readyState === WebSocket.OPEN && this.workflowId === workflowId) return;
     this.workflowId = workflowId;
     this.reconnectAttempt = 0;
+    this.router.destroy();
+    this.router = new AGUIEventRouter();
     this._open();
   }
 
@@ -44,6 +57,7 @@ export class WebSocketService {
       this.ws = null;
     }
     this.router.destroy();
+    this.router = new AGUIEventRouter();
   }
 
   send(msg: ClientMessage): void {
@@ -68,7 +82,7 @@ export class WebSocketService {
 
   private _open(): void {
     if (!this.workflowId) return;
-    const url = `${WS_BASE}/ws/${this.workflowId}`;
+    const url = `${websocketBaseUrl()}/ws/${this.workflowId}`;
     console.debug("[WS] connecting to", url);
 
     this.ws = new WebSocket(url);

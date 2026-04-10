@@ -15,6 +15,8 @@ interface MemoryGraphStore {
   highlightedEntityId: string | null;
   isLoading: boolean;
   lastFetchedAt: number | null;
+  /** Set when the last /api/memory/graph request failed (e.g. 503 KG disabled). */
+  lastFetchError: string | null;
   conflictCount: number;
 
   // Fetch from backend
@@ -44,16 +46,31 @@ export const useMemoryGraphStore = create<MemoryGraphStore>()((set, get) => ({
   highlightedEntityId: null,
   isLoading: false,
   lastFetchedAt: null,
+  lastFetchError: null,
   conflictCount: 0,
 
   fetchGraph: async (agentId) => {
-    set({ isLoading: true });
+    set({ isLoading: true, lastFetchError: null });
     try {
       const url = agentId
         ? `/api/memory/graph/${agentId}`
         : `/api/memory/graph`;
       const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try {
+          const body = (await res.json()) as { detail?: unknown };
+          if (body.detail != null) detail = String(body.detail);
+        } catch {
+          /* ignore non-JSON error bodies */
+        }
+        const friendly =
+          res.status === 503
+            ? "Memory graph is disabled on the API (MEMORY_GRAPH_ENABLED=false). Enable it and restart the API to use this view."
+            : detail;
+        set({ isLoading: false, lastFetchError: friendly });
+        return;
+      }
       const data = await res.json();
 
       const entities: Node<MemoryNodeData>[] = data.entities.map((e: { id: string; data: MemoryNodeData; position?: { x: number; y: number } }) => ({
@@ -77,10 +94,12 @@ export const useMemoryGraphStore = create<MemoryGraphStore>()((set, get) => ({
         activeAgentFilter: agentId ?? null,
         lastFetchedAt: Date.now(),
         isLoading: false,
+        lastFetchError: null,
       });
     } catch (e) {
       console.error("Failed to fetch memory graph:", e);
-      set({ isLoading: false });
+      const msg = e instanceof Error ? e.message : String(e);
+      set({ isLoading: false, lastFetchError: msg });
     }
   },
 
@@ -162,5 +181,6 @@ export const useMemoryGraphStore = create<MemoryGraphStore>()((set, get) => ({
       highlightedEntityId: null,
       conflictCount: 0,
       lastFetchedAt: null,
+      lastFetchError: null,
     }),
 }));

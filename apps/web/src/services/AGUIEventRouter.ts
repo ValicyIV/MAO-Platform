@@ -6,7 +6,9 @@
 // not per-token (up to 100/sec per agent × N agents).
 
 import type { ServerMessage, AgentEvent, CustomEvent } from "@mao/shared-types";
-import { AgentStatus } from "@mao/shared-types";
+import { AgentStatus, AgentRole, type RunStartedEvent } from "@mao/shared-types";
+import { applyMiddleware, DEFAULT_MIDDLEWARE } from "@/protocol/middleware";
+import { MAO_EVENTS } from "@/protocol/customEvents";
 import { useGraphStore } from "@/stores/graphStore";
 import { useStreamingStore } from "@/stores/streamingStore";
 import { useAgentStatusStore } from "@/stores/agentStatusStore";
@@ -17,6 +19,20 @@ import type { Node } from "@xyflow/react";
 // ── RAF token buffer ──────────────────────────────────────────────────────────
 
 type NodeId = string;
+
+function coerceAgentRole(role: string | undefined): AgentRole {
+  if (!role) return AgentRole.Research;
+  const lc = role.toLowerCase();
+  const map: Record<string, AgentRole> = {
+    orchestrator: AgentRole.Orchestrator,
+    research: AgentRole.Research,
+    code: AgentRole.Code,
+    data: AgentRole.Data,
+    writer: AgentRole.Writer,
+    verifier: AgentRole.Verifier,
+  };
+  return map[lc] ?? AgentRole.Research;
+}
 
 export class AGUIEventRouter {
   // Buffers pending token batches per node — flushed once per RAF frame
@@ -39,9 +55,11 @@ export class AGUIEventRouter {
 
   route(msg: ServerMessage): void {
     switch (msg.type) {
-      case "event":
-        this._handleEvent(msg.event);
+      case "event": {
+        const processed = applyMiddleware(msg.event, DEFAULT_MIDDLEWARE);
+        if (processed) this._handleEvent(processed);
         break;
+      }
       case "status":
         this._handleStatus(msg);
         break;
@@ -66,10 +84,12 @@ export class AGUIEventRouter {
 
     switch (event.type) {
       // ── Lifecycle ────────────────────────────────────────────────────────────
-      case "RUN_STARTED":
-        statusStore.setStatus(event.agentId, AgentStatus.Running);
-        this._ensureSpecialistNode(event.agentId, event.agentName ?? event.agentId);
+      case "RUN_STARTED": {
+        const ev = event as RunStartedEvent;
+        statusStore.setStatus(ev.agentId, AgentStatus.Running);
+        this._ensureSpecialistNode(ev);
         break;
+      }
 
       case "RUN_FINISHED":
         statusStore.setStatus(event.agentId, AgentStatus.Complete);
@@ -145,12 +165,12 @@ export class AGUIEventRouter {
     const memoryStore = useMemoryGraphStore.getState();
 
     switch (customType) {
-      case "thinking_delta":
+      case MAO_EVENTS.THINKING_DELTA:
         // Thinking tokens go through the same RAF buffer
         this._bufferToken(payload.nodeId, payload.delta);
         break;
 
-      case "agent_handoff": {
+      case MAO_EVENTS.AGENT_HANDOFF: {
         const graphStore = useGraphStore.getState();
         graphStore.addEdge({
           id: `handoff-${payload.fromAgentId}-${payload.toAgentId}-${Date.now()}`,
@@ -163,15 +183,15 @@ export class AGUIEventRouter {
         break;
       }
 
-      case "memory_update":
+      case MAO_EVENTS.MEMORY_UPDATE:
         memoryStore.applyMemoryDelta(payload.delta);
         break;
 
-      case "conflict_detected":
+      case MAO_EVENTS.CONFLICT_DETECTED:
         console.warn("[Memory] conflict detected", payload.entityAId, "vs", payload.entityBId);
         break;
 
-      case "heartbeat":
+      case MAO_EVENTS.HEARTBEAT:
         // Could update a connection status indicator
         break;
     }
@@ -212,7 +232,8 @@ export class AGUIEventRouter {
 
   // ── Node creation helpers ────────────────────────────────────────────────────
 
-  private _ensureSpecialistNode(agentId: string, agentName: string): void {
+  private _ensureSpecialistNode(ev: RunStartedEvent): void {
+    const { agentId, agentName, role, model, tools } = ev;
     const { nodes, addNode } = useGraphStore.getState();
     if (nodes.find((n) => n.id === agentId)) return;
 
@@ -223,10 +244,10 @@ export class AGUIEventRouter {
       data: {
         level: NodeLevel.Specialist,
         agentId,
-        agentName,
-        role: "research" as any,
-        model: "unknown" as any,
-        tools: [],
+        agentName: agentName ?? agentId,
+        role: coerceAgentRole(role),
+        model: (model ?? "unknown") as any,
+        tools: tools ?? [],
         status: AgentStatus.Running,
         tokenCount: 0,
         expanded: false,
@@ -269,6 +290,7 @@ export class AGUIEventRouter {
       type: "agentFlow",
       hidden: true,
     });
+    useGraphStore.getState().bumpLayout();
   }
 
   private _ensureThinkingNode(nodeId: string, parentStepId: string, agentId: string): void {
@@ -298,6 +320,7 @@ export class AGUIEventRouter {
       type: "agentFlow",
       hidden: true,
     });
+    useGraphStore.getState().bumpLayout();
   }
 
   private _ensureToolCallNode(
@@ -337,5 +360,6 @@ export class AGUIEventRouter {
       type: "toolCall",
       hidden: true,
     });
+    useGraphStore.getState().bumpLayout();
   }
 }

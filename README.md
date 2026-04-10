@@ -16,7 +16,7 @@ Browser (React Flow)
 FastAPI backend
   ├── LangGraph         — Multi-agent orchestration (supervisor + 4 specialists)
   ├── Anthropic Claude  — Extended thinking + streaming
-  ├── Memory stack      — Hot cache + episode logs + Kuzu knowledge graph (Mem0g)
+  ├── Memory stack      — Hot cache + episode logs + Kuzu knowledge graph (custom KG pipeline)
   └── Langfuse + OTEL   — Full observability
 ```
 
@@ -53,6 +53,16 @@ This starts:
 | API       | http://localhost:8000         |
 | API docs  | http://localhost:8000/api/docs|
 | Langfuse  | http://localhost:3001         |
+
+### Docker (full stack)
+
+From the repo root, with `.env` filled in (at minimum an LLM key):
+
+```bash
+docker compose up -d --build
+```
+
+Open **http://localhost:5173** for the UI. Nginx in the `web` container proxies **`/api`** and **`/ws`** to the `api` service, so the browser uses a single origin. API docs directly: **http://localhost:8000/api/docs**.
 
 ### 3. Run a workflow
 
@@ -116,8 +126,8 @@ mao-platform/
 - **Phase 0** ✓ Foundation (monorepo, types, Docker, settings)
 - **Phase 1** ✓ Agent core (LangGraph graph, registry, prompts)
 - **Phase 2** ✓ Streaming pipeline (event_mapper, WebSocket, stores)
-- **Phase 3** — Graph UI (FlowCanvas, nodes L1-L2, ELK layout)
-- **Phase 4** — Streaming nodes (ThinkingStreamNode, Pretext, L3-L4)
-- **Phase 5** — Patterns + memory (knowledge graph, consolidation, MCP)
-- **Phase 6** — Production hardening (PostgreSQL checkpointer, Redis WS)
-- **Phase 7** — Memory Graph UI (EntityNode, RelationshipEdge, live deltas)
+- **Phase 3** ✓ Graph UI (FlowCanvas, nodes L1-L2, ELK layout)
+- **Phase 4** ✓ Streaming nodes (ThinkingStreamNode, Pretext, L3-L4)
+- **Phase 5** — Patterns + memory (knowledge graph depth, consolidation polish, MCP coverage)
+- **Phase 6** — Production hardening (PostgreSQL checkpointer, Redis-backed sessions)
+- **Phase 7** ✓ Memory Graph UI (EntityNode, RelationshipEdge, live deltas via WebSocket)

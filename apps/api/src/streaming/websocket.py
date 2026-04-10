@@ -40,6 +40,8 @@ class ConnectionManager:
         self._rooms: dict[str, set[WebSocket]] = defaultdict(set)
         # { workflow_id: running workflow task }
         self._workflow_tasks: dict[str, asyncio.Task[None]] = {}
+        # Lightweight run metadata for GET /api/workflows/{id} (in-process; replace with Redis in multi-worker)
+        self._workflow_snapshots: dict[str, dict[str, Any]] = {}
 
     async def connect(self, websocket: WebSocket, workflow_id: str) -> None:
         await websocket.accept()
@@ -80,6 +82,44 @@ class ConnectionManager:
     def active_workflow_count(self) -> int:
         return len(self._rooms)
 
+    def get_workflow_snapshot(self, workflow_id: str) -> dict[str, Any] | None:
+        """Last known state for a workflow run (in-process only)."""
+        return self._workflow_snapshots.get(workflow_id)
+
+    def _init_workflow_snapshot(self, workflow_id: str) -> None:
+        now = time.time()
+        self._workflow_snapshots[workflow_id] = {
+            "started_at": now,
+            "finished_at": None,
+            "status": "running",
+            "agents_involved": [],
+            "total_tokens": 0,
+            "error": None,
+        }
+
+    def _finalize_workflow_snapshot(
+        self, workflow_id: str, *, status: str, error: str | None = None
+    ) -> None:
+        snap = self._workflow_snapshots.get(workflow_id)
+        if not snap or snap.get("status") != "running":
+            return
+        snap["finished_at"] = time.time()
+        snap["status"] = status
+        if error is not None:
+            snap["error"] = error
+
+    def note_stream_event(self, workflow_id: str, event: dict[str, Any]) -> None:
+        snap = self._workflow_snapshots.get(workflow_id)
+        if not snap:
+            return
+        et = event.get("type")
+        if et == "RUN_STARTED":
+            aid = event.get("agentId")
+            if aid and aid not in snap["agents_involved"]:
+                snap["agents_involved"].append(aid)
+        elif et == "RUN_FINISHED":
+            snap["total_tokens"] += int(event.get("totalTokens") or 0)
+
     async def _send(self, websocket: WebSocket, message: dict[str, Any]) -> None:
         if websocket.client_state == WebSocketState.CONNECTED:
             await websocket.send_text(json.dumps(message, default=str))
@@ -89,6 +129,8 @@ class ConnectionManager:
         if workflow_id in self._workflow_tasks:
             log.warning("ws.workflow_already_running", workflow_id=workflow_id)
             return
+
+        self._init_workflow_snapshot(workflow_id)
 
         task_obj = asyncio.create_task(
             self._stream_workflow(workflow_id, task),
@@ -107,6 +149,7 @@ class ConnectionManager:
         task = self._workflow_tasks.get(workflow_id)
         if task:
             task.cancel()
+            self._finalize_workflow_snapshot(workflow_id, status="cancelled")
             await self.broadcast(
                 {"type": "status", "workflowId": workflow_id, "status": "cancelled"},
                 workflow_id,
@@ -153,11 +196,13 @@ class ConnectionManager:
             ):
                 mapped_events = mapper.map(stream_part)
                 for event in mapped_events:
+                    self.note_stream_event(workflow_id, event)
                     await self.broadcast(
                         {"type": "event", "workflowId": workflow_id, "event": event},
                         workflow_id,
                     )
 
+            self._finalize_workflow_snapshot(workflow_id, status="complete")
             await self.broadcast({
                 "type": "status",
                 "workflowId": workflow_id,
@@ -165,9 +210,11 @@ class ConnectionManager:
             }, workflow_id)
 
         except asyncio.CancelledError:
+            self._finalize_workflow_snapshot(workflow_id, status="cancelled")
             raise
         except Exception as e:
             log.error("ws.stream_error", workflow_id=workflow_id, error=str(e))
+            self._finalize_workflow_snapshot(workflow_id, status="error", error=str(e))
             await self.broadcast({
                 "type": "error",
                 "code": "STREAM_ERROR",

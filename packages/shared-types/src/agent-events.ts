@@ -47,6 +47,10 @@ export interface RunStartedEvent extends BaseEvent {
   agentName: string;
   workflowId: string;
   input: string;
+  /** Registry-backed fields (sent when API resolves agent_id via get_agent_configs). */
+  role?: string;
+  model?: string;
+  tools?: string[];
 }
 
 export interface RunFinishedEvent extends BaseEvent {

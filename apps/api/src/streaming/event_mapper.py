@@ -307,14 +307,28 @@ class StreamPartMapper:
         if not agent_id or agent_id == "unknown" or agent_id in self._started_agents:
             return []
         self._started_agents.add(agent_id)
+
+        from src.agents.registry import get_agent_configs
+
+        cfg = get_agent_configs().get(agent_id)
+        agent_name = cfg.name if cfg else agent_id.replace("_", " ").title()
+        role = (cfg.role if cfg else "research").lower()
+        model = cfg.model if cfg else "unknown"
+        tools: list[str] = []
+        if cfg and cfg.tools:
+            tools = [getattr(t, "name", str(t)) for t in cfg.tools]
+
         return [{
             "type": "RUN_STARTED",
             "runId": self.workflow_id,
             "timestamp": ts,
             "agentId": agent_id,
-            "agentName": agent_id.replace("_", " ").title(),
+            "agentName": agent_name,
             "workflowId": self.workflow_id,
             "input": "",
+            "role": role,
+            "model": model,
+            "tools": tools,
         }]
 
     def _maybe_emit_text_start(self, data: dict[str, Any], ts: int, *, is_thinking: bool) -> list[dict[str, Any]]:

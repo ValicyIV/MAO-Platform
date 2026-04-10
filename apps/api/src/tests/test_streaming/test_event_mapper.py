@@ -27,6 +27,7 @@ def test_text_delta_produces_content_event(mapper):
         "run_id": "run-abc",
         "data": {
             "run_id": "run-abc",
+            "tags": ["research"],
             "chunk": {"content": [{"type": "text", "text": "Hello"}]},
         },
     }
@@ -38,6 +39,11 @@ def test_text_delta_produces_content_event(mapper):
     assert events[2]["type"] == "TEXT_MESSAGE_CONTENT"
     assert events[2]["delta"] == "Hello"
     assert events[2]["isThinking"] is False
+    rs = events[0]
+    assert rs["agentId"] == "research"
+    assert rs["role"] == "research"
+    assert "model" in rs and rs["model"]
+    assert rs["tools"] == []
 
 
 def test_thinking_delta_produces_custom_event(mapper):
