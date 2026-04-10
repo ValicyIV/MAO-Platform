@@ -10,14 +10,13 @@ from __future__ import annotations
 import pytest
 
 from src.agents.model_router import (
+    PROVIDER_CAPS,
     ModelProvider,
     detect_provider,
-    model_display_name,
     model_badge_color,
+    model_display_name,
     provider_supports_thinking,
-    PROVIDER_CAPS,
 )
-
 
 # ── Provider detection ────────────────────────────────────────────────────────
 

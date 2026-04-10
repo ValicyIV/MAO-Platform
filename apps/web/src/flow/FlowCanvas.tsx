@@ -60,7 +60,7 @@ export default function FlowCanvas({ viewMode }: FlowCanvasProps) {
   const edges = useVisibleEdges();
 
   // Auto-layout via ELK ΓÇö runs when layoutVersion changes (workflow canvas only)
-  useAutoLayout(layoutVersion, viewMode !== "memory");
+  useAutoLayout(layoutVersion);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: { id: string }) => {

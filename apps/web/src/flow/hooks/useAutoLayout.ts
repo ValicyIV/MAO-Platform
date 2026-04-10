@@ -70,8 +70,8 @@ export function useAutoLayout(layoutVersion: number) {
               {
                 x: found?.x ?? node.position.x,
                 y: found?.y ?? node.position.y,
-                width: found?.width,
-                height: found?.height,
+                ...(found?.width !== undefined ? { width: found.width } : {}),
+                ...(found?.height !== undefined ? { height: found.height } : {}),
               },
             ];
           })

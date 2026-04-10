@@ -5,7 +5,8 @@ test_patterns/test_privacy_routing.py — Tests for EdgeClaw privacy routing (Pa
 from __future__ import annotations
 
 import pytest
-from src.agents.base import PrivacyRouter, privacy_router
+
+from src.agents.base import privacy_router
 
 
 class TestPrivacyTierClassification:
@@ -54,8 +55,7 @@ class TestPrivacyTierClassification:
 test_patterns/test_memory_consolidation.py — Tests for memory consolidation (Pattern 8).
 """
 
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 
 @pytest.mark.asyncio

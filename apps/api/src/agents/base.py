@@ -96,7 +96,7 @@ def create_specialist_agent(config: AgentConfig) -> Any:
     - Memory tools injected for memory-enabled agents
     """
     from src.agents.model_router import get_chat_model, provider_supports_thinking
-    from src.tools.memory_tools import remember_fact_tool, recall_tool, link_concepts_tool
+    from src.tools.memory_tools import link_concepts_tool, recall_tool, remember_fact_tool
 
     # Resolve model via router — provider-agnostic
     thinking_budget = (

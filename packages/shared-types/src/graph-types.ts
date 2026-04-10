@@ -53,7 +53,7 @@ export enum MemoryEntityType {
 
 // ── Level 1: Orchestrator ─────────────────────────────────────────────────────
 
-export interface OrchestratorNodeData {
+export interface OrchestratorNodeData extends Record<string, unknown> {
   level: NodeLevel.Orchestrator;
   workflowId: string;
   workflowName: string;
@@ -66,10 +66,11 @@ export interface OrchestratorNodeData {
 
 // ── Level 2: Specialist Agent ─────────────────────────────────────────────────
 
-export interface SpecialistNodeData {
+export interface SpecialistNodeData extends Record<string, unknown> {
   level: NodeLevel.Specialist;
   agentId: string;
   agentName: string;
+  emoji?: string;
   role: AgentRole;
   model: ModelTier;
   tools: string[];
@@ -81,7 +82,7 @@ export interface SpecialistNodeData {
 
 // ── Level 3: Execution Step ───────────────────────────────────────────────────
 
-export interface ExecutionStepNodeData {
+export interface ExecutionStepNodeData extends Record<string, unknown> {
   level: NodeLevel.ExecutionStep;
   stepId: string;
   agentId: string;
@@ -95,7 +96,7 @@ export interface ExecutionStepNodeData {
   hasThinking: boolean;
 }
 
-export interface ToolCallNodeData {
+export interface ToolCallNodeData extends Record<string, unknown> {
   level: NodeLevel.ExecutionStep;
   stepId: string;
   agentId: string;
@@ -111,7 +112,7 @@ export interface ToolCallNodeData {
 
 // ── Level 4: Thinking Stream ──────────────────────────────────────────────────
 
-export interface ThinkingStreamNodeData {
+export interface ThinkingStreamNodeData extends Record<string, unknown> {
   level: NodeLevel.ThinkingStream;
   stepId: string;
   agentId: string;
@@ -123,7 +124,7 @@ export interface ThinkingStreamNodeData {
 
 // ── Memory Graph Nodes ────────────────────────────────────────────────────────
 
-export interface MemoryNodeData {
+export interface MemoryNodeData extends Record<string, unknown> {
   entityId: string;
   entityType: MemoryEntityType;
   label: string;
@@ -135,7 +136,7 @@ export interface MemoryNodeData {
   isContradicted: boolean;
 }
 
-export interface MemoryEdgeData {
+export interface MemoryEdgeData extends Record<string, unknown> {
   relationship: MemoryRelationship;
   confidence: number;
   timestamp: number;

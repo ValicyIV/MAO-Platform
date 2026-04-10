@@ -6,6 +6,7 @@ import {
   BaseEdge,
   EdgeLabelRenderer,
   getBezierPath,
+  type Edge,
   type EdgeProps,
 } from "@xyflow/react";
 import type { MemoryEdgeData } from "@mao/shared-types";
@@ -27,7 +28,7 @@ export const RelationshipEdge = memo(({
   sourceX, sourceY, targetX, targetY,
   sourcePosition, targetPosition,
   data,
-}: EdgeProps<MemoryEdgeData>) => {
+}: EdgeProps<Edge<MemoryEdgeData>>) => {
   const [path, labelX, labelY] = getBezierPath({
     sourceX, sourceY, sourcePosition,
     targetX, targetY, targetPosition,

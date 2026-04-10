@@ -6,23 +6,21 @@ Prefixed at /api by main.py.
 
 from __future__ import annotations
 
-import uuid
 import time
-from datetime import datetime, timezone
+import uuid
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, HTTPException, Query
 
 from src.api.schemas import (
+    AgentBuilderMeta,
     AgentConfigFull,
     AgentConfigPatch,
     AgentCreateRequest,
-    AgentBuilderMeta,
     AgentInfo,
-    ErrorResponse,
     HealthResponse,
     MemoryGraphResponse,
-    MemorySearchRequest,
     MemorySearchResult,
     WorkflowCreate,
     WorkflowResponse,
@@ -61,7 +59,7 @@ async def create_workflow(body: WorkflowCreate) -> WorkflowResponse:
     return WorkflowResponse(
         workflow_id=workflow_id,
         status="created",
-        created_at=datetime.now(tz=timezone.utc),
+        created_at=datetime.now(tz=UTC),
         websocket_url=ws_url,
     )
 
@@ -84,8 +82,8 @@ async def get_workflow(workflow_id: str) -> WorkflowStatus:
     return WorkflowStatus(
         workflow_id=workflow_id,
         status=snap["status"],
-        started_at=datetime.fromtimestamp(snap["started_at"], tz=timezone.utc),
-        finished_at=datetime.fromtimestamp(snap["finished_at"], tz=timezone.utc)
+        started_at=datetime.fromtimestamp(snap["started_at"], tz=UTC),
+        finished_at=datetime.fromtimestamp(snap["finished_at"], tz=UTC)
         if snap.get("finished_at")
         else None,
         total_tokens=int(snap.get("total_tokens") or 0),
@@ -114,8 +112,8 @@ async def list_agents() -> list[AgentInfo]:
 
 
 
-def _cfg_to_full(agent_id: str, cfg) -> "AgentConfigFull":
-    from src.agents.model_router import model_display_name, model_badge_color, detect_provider
+def _cfg_to_full(agent_id: str, cfg) -> AgentConfigFull:
+    from src.agents.model_router import detect_provider, model_badge_color, model_display_name
     return AgentConfigFull(
         id=agent_id,
         name=cfg.name,
@@ -172,10 +170,8 @@ async def patch_agent_config(agent_name: str, patch: AgentConfigPatch) -> AgentC
 
     Only the fields included in the request body are changed.
     """
-    from src.agents.registry import update_agent_config
-
     # Validate agent name
-    from src.agents.registry import get_agent_configs
+    from src.agents.registry import get_agent_configs, update_agent_config
     if agent_name not in get_agent_configs():
         raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
 
@@ -195,7 +191,7 @@ async def patch_agent_config(agent_name: str, patch: AgentConfigPatch) -> AgentC
 )
 async def reset_agent_config_endpoint(agent_name: str) -> AgentConfigFull:
     """Remove all file overrides for this agent, reverting to env/code defaults."""
-    from src.agents.registry import reset_agent_config, get_agent_configs
+    from src.agents.registry import get_agent_configs, reset_agent_config
 
     if agent_name not in get_agent_configs():
         raise HTTPException(status_code=404, detail=f"Agent '{agent_name}' not found")
@@ -210,7 +206,7 @@ async def reset_agent_config_endpoint(agent_name: str) -> AgentConfigFull:
 
 @router.get("/agents/builder/meta", response_model=AgentBuilderMeta, summary="Metadata for the agent builder UI")
 async def get_builder_meta() -> AgentBuilderMeta:
-    from src.agents.registry import AVAILABLE_TOOLS, ROLE_OPTIONS, PERSONALITY_TEMPLATES
+    from src.agents.registry import AVAILABLE_TOOLS, PERSONALITY_TEMPLATES, ROLE_OPTIONS
     return AgentBuilderMeta(
         available_tools=AVAILABLE_TOOLS,
         role_options=ROLE_OPTIONS,
@@ -235,15 +231,16 @@ async def create_agent(body: AgentCreateRequest) -> AgentConfigFull:
 
 # ── Delete custom agent ───────────────────────────────────────────────────────
 
-@router.delete("/agents/config/{agent_name}", status_code=204,
+@router.delete("/agents/config/{agent_name}", status_code=200,
                summary="Delete a custom agent (built-ins cannot be deleted)")
-async def delete_agent(agent_name: str) -> None:
+async def delete_agent(agent_name: str) -> dict[str, str]:
     from src.agents.registry import delete_agent as _delete
     try:
         _delete(agent_name)
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     log.info("agent.deleted id=%s", agent_name)
+    return {"status": "deleted", "agent_name": agent_name}
 
 # ── Memory ────────────────────────────────────────────────────────────────────
 
@@ -305,7 +302,7 @@ async def search_memory(
             confidence=r.get("confidence", 1.0),
             relevance_score=r.get("score", 0.0),
             agent_id=r.get("agent_id"),
-            updated_at=datetime.fromtimestamp(r["updated_at"] / 1000, tz=timezone.utc),
+            updated_at=datetime.fromtimestamp(r["updated_at"] / 1000, tz=UTC),
         )
         for r in results
     ]

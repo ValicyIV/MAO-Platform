@@ -4,9 +4,7 @@ test_agents/test_registry.py — Tests for the agent registry and config validat
 
 from __future__ import annotations
 
-import pytest
 from src.agents.registry import AGENTS, AgentConfig
-
 
 REQUIRED_SPECIALISTS = {"research", "code", "data", "writer", "supervisor", "verifier"}
 
@@ -26,19 +24,22 @@ class TestAgentRegistry:
             assert config.name.strip(), f"Agent '{name}' has empty name"
 
     def test_supervisor_uses_opus(self):
-        """Supervisor must use Opus (Pattern 3 — best model for planning)."""
-        assert "opus" in AGENTS["supervisor"].model.lower()
+        """Supervisor prefers Opus, but may fall back when cloud keys are missing."""
+        model = AGENTS["supervisor"].model.lower()
+        assert "opus" in model or model.startswith("openai/") or model.startswith("ollama/")
 
     def test_specialists_use_sonnet(self):
-        """Standard specialists should use Sonnet."""
+        """Specialists prefer Sonnet, with provider fallback when unavailable."""
         for role in ("research", "code", "data", "writer"):
-            assert "sonnet" in AGENTS[role].model.lower(), (
-                f"Specialist '{role}' should use Sonnet, got: {AGENTS[role].model}"
+            model = AGENTS[role].model.lower()
+            assert "sonnet" in model or model.startswith("openai/") or model.startswith("ollama/"), (
+                f"Specialist '{role}' should use Sonnet or provider fallback, got: {AGENTS[role].model}"
             )
 
     def test_consolidator_uses_haiku(self):
-        """Consolidator (background task) must use cheapest model."""
-        assert "haiku" in AGENTS["consolidator"].model.lower()
+        """Consolidator prefers Haiku, with cheaper provider fallback allowed."""
+        model = AGENTS["consolidator"].model.lower()
+        assert "haiku" in model or model.startswith("openai/") or model.startswith("ollama/")
 
     def test_all_agents_have_at_least_one_tool(self):
         """Every non-orchestrator agent needs at least one tool."""

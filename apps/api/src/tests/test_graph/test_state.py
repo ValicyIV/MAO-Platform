@@ -14,9 +14,8 @@ from __future__ import annotations
 import pytest
 from langgraph.graph import END
 
-from src.graph.state import OrchestratorState, merge_outputs, merge_mailboxes
 from src.graph.edges import route_to_agent, should_verify
-
+from src.graph.state import merge_mailboxes, merge_outputs
 
 # ── State reducers ────────────────────────────────────────────────────────────
 

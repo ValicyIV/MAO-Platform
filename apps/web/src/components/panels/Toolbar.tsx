@@ -18,7 +18,7 @@ interface ToolbarProps {
 export function Toolbar({ viewMode, onViewModeChange, workflowId, onWorkflowStart }: ToolbarProps) {
   const [task, setTask] = useState("");
   const [showConfig, setShowConfig] = useState(false);
-  const { connected, connect } = useAgentConnection();
+  const { connect } = useAgentConnection();
   const activeStreams = useActiveStreamCount();
   const conflictCount = useMemoryGraphStore((s) => s.conflictCount);
   const resetGraph = useGraphStore((s) => s.reset);

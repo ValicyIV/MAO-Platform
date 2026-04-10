@@ -5,8 +5,6 @@ compiles correctly and has the expected topology.
 
 from __future__ import annotations
 
-import pytest
-
 
 def test_graph_compiles_without_error(mock_anthropic, mock_memory_graph):
     """The StateGraph should compile with all nodes and edges wired correctly."""

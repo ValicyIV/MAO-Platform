@@ -9,8 +9,9 @@ non-orchestrator agent prompt, and all dynamic content must appear below it.
 from __future__ import annotations
 
 import pytest
-from src.config.prompts import get_prompt
+
 from src.agents.base import CACHE_BOUNDARY
+from src.config.prompts import get_prompt
 
 SPECIALIST_ROLES = ["research", "code", "data", "writer", "verifier"]
 

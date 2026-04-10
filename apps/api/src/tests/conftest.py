@@ -4,9 +4,10 @@ conftest.py — Shared pytest fixtures for all test modules.
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 @pytest.fixture

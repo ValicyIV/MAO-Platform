@@ -2,7 +2,7 @@
 // Color-coded by entity type. Temporal mode fades old facts.
 
 import { memo } from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { useMemoryGraphStore } from "@/stores/memoryGraphStore";
 import { MemoryEntityType } from "@mao/shared-types";
 import type { MemoryNodeData } from "@mao/shared-types";
@@ -18,7 +18,7 @@ const TYPE_STYLES: Record<MemoryEntityType, { border: string; bg: string; dot: s
   [MemoryEntityType.Procedure]: { border: "border-orange-500/40", bg: "bg-orange-500/10", dot: "bg-orange-400", label: "Procedure" },
 };
 
-export const EntityNode = memo(({ id, data }: NodeProps<MemoryNodeData>) => {
+export const EntityNode = memo(({ id, data }: NodeProps<Node<MemoryNodeData>>) => {
   const showTemporal = useMemoryGraphStore((s) => s.showTemporal);
   const highlighted = useMemoryGraphStore((s) => s.highlightedEntityId);
   const style = TYPE_STYLES[data.entityType] ?? TYPE_STYLES[MemoryEntityType.Concept]!;

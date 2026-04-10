@@ -27,7 +27,6 @@ export function usePretextMeasure(
 ): number {
   return useMemo(
     () => PretextService.getHeight(nodeId, text, nodeWidth, lineHeight),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [nodeId, textLength, nodeWidth, lineHeight]
   );
 }

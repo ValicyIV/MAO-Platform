@@ -26,7 +26,6 @@ import json
 import logging
 import os
 from copy import deepcopy
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -145,6 +144,11 @@ def _code_defaults() -> dict[str, dict[str, Any]]:
         anthropic_fallback="claude-sonnet-4-6",
         openrouter_fallback="openai/gpt-4o-mini",
     )
+    consolidator_model = settings.resolve_model_for_available_providers(
+        "claude-haiku-4-5",
+        anthropic_fallback="claude-haiku-4-5",
+        openrouter_fallback="openai/gpt-4o-mini",
+    )
     return {
         "supervisor": {
             # Must match get_prompt() keys (supervisor), not UI "orchestrator" wording.
@@ -153,6 +157,7 @@ def _code_defaults() -> dict[str, dict[str, Any]]:
             "description": "Plans and delegates tasks to specialist agents.",
             "temperature": 1.0, "thinking_enabled": True,
             "thinking_budget_tokens": 10000, "memory_enabled": True,
+            "tools": [],
         },
         "research": {
             "name": "Research Agent", "role": "research", "emoji": "🔍",
@@ -160,6 +165,7 @@ def _code_defaults() -> dict[str, dict[str, Any]]:
             "description": "Searches the web and synthesises research findings.",
             "temperature": 1.0, "thinking_enabled": True,
             "thinking_budget_tokens": settings.thinking_budget_tokens, "memory_enabled": True,
+            "tools": ["web_search", "fetch_url", "arxiv_search", "remember_fact", "recall"],
         },
         "code": {
             "name": "Code Agent", "role": "code", "emoji": "💻",
@@ -167,6 +173,7 @@ def _code_defaults() -> dict[str, dict[str, Any]]:
             "description": "Writes, executes, and debugs code.",
             "temperature": 1.0, "thinking_enabled": True,
             "thinking_budget_tokens": settings.thinking_budget_tokens, "memory_enabled": True,
+            "tools": ["python_repl", "bash_exec", "read_file", "write_file", "remember_fact", "recall"],
         },
         "data": {
             "name": "Data Agent", "role": "data", "emoji": "📊",
@@ -174,6 +181,7 @@ def _code_defaults() -> dict[str, dict[str, Any]]:
             "description": "Analyses data and generates visualisations.",
             "temperature": 1.0, "thinking_enabled": True,
             "thinking_budget_tokens": settings.thinking_budget_tokens, "memory_enabled": True,
+            "tools": ["python_repl", "read_file", "write_file", "remember_fact", "recall"],
         },
         "writer": {
             "name": "Writer Agent", "role": "writer", "emoji": "✍️",
@@ -181,6 +189,7 @@ def _code_defaults() -> dict[str, dict[str, Any]]:
             "description": "Composes and edits documents and prose.",
             "temperature": 1.0, "thinking_enabled": False,
             "thinking_budget_tokens": 0, "memory_enabled": True,
+            "tools": ["read_file", "write_file", "format_markdown", "remember_fact", "recall"],
         },
         "verifier": {
             "name": "Verifier", "role": "verifier", "emoji": "✅",
@@ -188,6 +197,15 @@ def _code_defaults() -> dict[str, dict[str, Any]]:
             "description": "Adversarial reviewer — finds errors, not confirmations.",
             "temperature": 1.0, "thinking_enabled": True,
             "thinking_budget_tokens": 4000, "memory_enabled": False,
+            "tools": ["read_file", "recall"],
+        },
+        "consolidator": {
+            "name": "Consolidator", "role": "consolidator", "emoji": "🧠",
+            "model": consolidator_model,
+            "description": "Background memory consolidation and conflict detection.",
+            "temperature": 1.0, "thinking_enabled": False,
+            "thinking_budget_tokens": 0, "memory_enabled": False,
+            "tools": [],
         },
     }
 
@@ -269,13 +287,14 @@ def _dict_to_config(name: str, d: dict[str, Any]) -> AgentConfig:
         thinking_enabled      = bool(d.get("thinking_enabled", True)),
         thinking_budget_tokens= int(d.get("thinking_budget_tokens", 8000)),
         memory_enabled        = bool(d.get("memory_enabled", True)),
+        tools                 = list(d.get("tools", [])),
         is_custom             = bool(d.get("is_custom", False)),
     )
 
 
 # ── CRUD ──────────────────────────────────────────────────────────────────────
 
-def _invalidate():
+def _invalidate() -> None:
     global _dirty, _resolved, _built_agents
     _dirty = True
     _resolved = None
@@ -339,19 +358,17 @@ def reset_agent(name: str) -> AgentConfig:
 
 # ── Builder ───────────────────────────────────────────────────────────────────
 
-_built_agents: dict[str, Any] | None = None
-
 
 async def build_agents() -> dict[str, Any]:
     global _built_agents, _dirty
     if _built_agents is not None and not _dirty:
         return _built_agents
 
-    from src.tools.search    import web_search_tool, arxiv_tool, fetch_url
-    from src.tools.code      import python_repl_tool, bash_tool
-    from src.tools.documents import read_file_tool, write_file_tool, format_markdown_tool
-    from src.tools.memory_tools import remember_fact_tool, recall_tool, link_concepts_tool
+    from src.tools.code import bash_tool, python_repl_tool
+    from src.tools.documents import format_markdown_tool, read_file_tool, write_file_tool
     from src.tools.mcp_tools import get_tools_for_agent
+    from src.tools.memory_tools import link_concepts_tool, recall_tool, remember_fact_tool
+    from src.tools.search import arxiv_tool, fetch_url, web_search_tool
 
     tool_registry = {
         "web_search":      web_search_tool,
@@ -406,3 +423,12 @@ def get_agents() -> dict[str, Any]:
     if _built_agents is None:
         raise RuntimeError("Agents not built — call await build_agents() first")
     return _built_agents
+
+
+def reset_agent_config(name: str) -> AgentConfig:
+    """Backwards-compatible alias used by API routes/tests."""
+    return reset_agent(name)
+
+
+# Backwards-compatible snapshot used by legacy tests.
+AGENTS: dict[str, AgentConfig] = get_agent_configs()

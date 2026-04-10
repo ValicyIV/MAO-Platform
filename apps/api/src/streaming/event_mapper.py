@@ -435,7 +435,7 @@ class StreamPartMapper:
             return chunk_dict.get("content", "")
         if hasattr(chunk, "content"):
             try:
-                return getattr(chunk, "content")
+                return chunk.content
             except Exception:
                 return ""
         return ""

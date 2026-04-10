@@ -154,7 +154,8 @@ class MemoryConsolidator:
         self, agent_id: str, episodes_text: str
     ) -> list[dict[str, Any]]:
         """Stage 1: Use the extraction model to distill facts from episodes."""
-        from langchain_core.messages import SystemMessage, HumanMessage
+        from langchain_core.messages import HumanMessage, SystemMessage
+
         from src.agents.model_router import get_extraction_model
         from src.config.prompts import get_prompt
 

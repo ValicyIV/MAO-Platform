@@ -104,7 +104,7 @@ function buildElkNode(
     id: node.id,
     width:    node.width  ?? 320,
     height:   node.height ?? 80,
-    children: children.length > 0 ? children : undefined,
+    ...(children.length > 0 ? { children } : {}),
   };
 }
 
@@ -119,7 +119,12 @@ function flattenElkPositions(
   const y = (node.y ?? 0) + offsetY;
 
   if (node.id !== "root") {
-    map.set(node.id, { x, y, width: node.width, height: node.height });
+    map.set(node.id, {
+      x,
+      y,
+      ...(node.width !== undefined ? { width: node.width } : {}),
+      ...(node.height !== undefined ? { height: node.height } : {}),
+    });
   }
 
   for (const child of node.children ?? []) {

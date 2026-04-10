@@ -909,14 +909,20 @@ export function AgentBuilderPanel({ existing, onClose, onSaved }: Props) {
           <div className="flex gap-2">
             <button
               disabled={tab === TABS[0]}
-              onClick={() => setTab(TABS[Math.max(0, TABS.indexOf(tab) - 1)])}
+              onClick={() => {
+                const prevTab = TABS[Math.max(0, TABS.indexOf(tab) - 1)] ?? tab;
+                setTab(prevTab);
+              }}
               className="text-xs px-3 py-1.5 rounded border border-neutral-700 text-neutral-400 hover:text-neutral-200 disabled:opacity-30 disabled:cursor-not-allowed"
             >
               ← Back
             </button>
             {tab !== TABS[TABS.length - 1] && (
               <button
-                onClick={() => setTab(TABS[Math.min(TABS.length - 1, TABS.indexOf(tab) + 1)])}
+                onClick={() => {
+                  const nextTab = TABS[Math.min(TABS.length - 1, TABS.indexOf(tab) + 1)] ?? tab;
+                  setTab(nextTab);
+                }}
                 className="text-xs px-3 py-1.5 rounded border border-neutral-700 text-neutral-400 hover:text-neutral-200"
               >
                 Next →

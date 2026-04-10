@@ -118,10 +118,16 @@ export function AgentConfigPanel({ onClose }: Props) {
           existing={editTarget}
           onClose={() => setEditTarget(undefined)}
           onSaved={(saved) => {
+            const normalized: AgentConfig = {
+              ...saved,
+              provider: saved.provider ?? "custom",
+              display_name: saved.name,
+              badge_color: saved.badge_color ?? "neutral",
+            };
             setAgents((prev) =>
-              prev.find((a) => a.id === saved.id)
-                ? prev.map((a) => (a.id === saved.id ? saved : a))
-                : [...prev, saved]
+              prev.find((a) => a.id === normalized.id)
+                ? prev.map((a) => (a.id === normalized.id ? normalized : a))
+                : [...prev, normalized]
             );
             setEditTarget(undefined);
           }}

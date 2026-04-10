@@ -8,8 +8,8 @@ No LLM calls, no network — pure transformation logic.
 from __future__ import annotations
 
 import pytest
-from src.streaming.event_mapper import StreamPartMapper
 
+from src.streaming.event_mapper import StreamPartMapper
 
 WORKFLOW_ID = "test-wf-001"
 

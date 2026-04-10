@@ -34,8 +34,8 @@ async def remember_fact_tool(
     Returns:
         Confirmation that the fact was stored.
     """
-    from src.persistence.knowledge_graph import knowledge_graph
     from src.config.settings import settings
+    from src.persistence.knowledge_graph import knowledge_graph
 
     if not settings.memory_graph_enabled:
         return "Memory graph disabled — fact not stored."
@@ -64,8 +64,8 @@ async def recall_tool(query: str, limit: int = 5) -> str:
     Returns:
         Formatted list of relevant facts with confidence scores.
     """
-    from src.persistence.knowledge_graph import knowledge_graph
     from src.config.settings import settings
+    from src.persistence.knowledge_graph import knowledge_graph
 
     if not settings.memory_graph_enabled:
         return "Memory graph disabled."
@@ -110,8 +110,8 @@ async def link_concepts_tool(
     Returns:
         Confirmation of the created link.
     """
-    from src.persistence.knowledge_graph import knowledge_graph
     from src.config.settings import settings
+    from src.persistence.knowledge_graph import knowledge_graph
 
     if not settings.memory_graph_enabled:
         return "Memory graph disabled."
@@ -138,8 +138,8 @@ async def get_agent_memory_tool(agent_id: str) -> str:
     Returns:
         Formatted summary of the agent's knowledge graph entries.
     """
-    from src.persistence.knowledge_graph import knowledge_graph
     from src.config.settings import settings
+    from src.persistence.knowledge_graph import knowledge_graph
 
     if not settings.memory_graph_enabled:
         return "Memory graph disabled."

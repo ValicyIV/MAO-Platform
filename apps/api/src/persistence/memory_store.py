@@ -176,3 +176,17 @@ async def list_agent_ids() -> list[str]:
     if not MEMORY_BASE.exists():
         return []
     return [p.name for p in MEMORY_BASE.iterdir() if p.is_dir()]
+
+
+class _MemoryStoreCompat:
+    """Backwards-compatible object API used by older tests/call sites."""
+
+    load_recent_episodes = staticmethod(load_recent_episodes)
+    load_core_memory = staticmethod(load_core_memory)
+    save_core_memory = staticmethod(save_core_memory)
+    append_episode = staticmethod(append_episode)
+    prune_old_episodes = staticmethod(prune_old_episodes)
+    list_agent_ids = staticmethod(list_agent_ids)
+
+
+memory_store = _MemoryStoreCompat()

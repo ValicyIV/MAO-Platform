@@ -28,8 +28,8 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-from pathlib import Path
 import time
+from pathlib import Path
 from typing import Any
 
 import kuzu
@@ -347,7 +347,7 @@ class KnowledgeGraph:
         return self._llm
 
     async def _extract(self, content: str, agent_id: str | None) -> dict:
-        from langchain_core.messages import SystemMessage, HumanMessage
+        from langchain_core.messages import HumanMessage, SystemMessage
         prompt = (
             f"Extract entities and relationships from this agent activity "
             f"(agent: {agent_id or 'unknown'}):\n\n{content[:3000]}\n\n"
@@ -386,7 +386,7 @@ class KnowledgeGraph:
                     "Do these contradict? {\"contradicts\": true/false, \"reason\": \"...\"}"
                 )
                 try:
-                    from langchain_core.messages import SystemMessage, HumanMessage
+                    from langchain_core.messages import HumanMessage, SystemMessage
                     llm = self._get_llm()
                     resp = await llm.ainvoke([
                         SystemMessage(content=_CONFLICT_SYSTEM),

@@ -11,8 +11,8 @@ All routers, middleware, and the AG-UI LangGraph endpoint are mounted here.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 import structlog
 from fastapi import FastAPI
@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import ORJSONResponse
 
 from src.config.settings import settings
-from src.observability.telemetry import init_telemetry, flush_telemetry
+from src.observability.telemetry import flush_telemetry, init_telemetry
 
 log = structlog.get_logger(__name__)
 
@@ -97,7 +97,7 @@ def create_app() -> FastAPI:
     )
 
     # ── Request logging + error handling middleware ────────────────────────────
-    from src.api.middleware import RequestLoggingMiddleware, ErrorHandlingMiddleware
+    from src.api.middleware import ErrorHandlingMiddleware, RequestLoggingMiddleware
     app.add_middleware(RequestLoggingMiddleware)
     app.add_middleware(ErrorHandlingMiddleware)
 
@@ -113,6 +113,7 @@ def create_app() -> FastAPI:
     # Mounts POST /agent and GET /agent/stream/{thread_id}
     try:
         from ag_ui_langgraph import add_langgraph_fastapi_endpoint
+
         from src.graph.graph import graph
         add_langgraph_fastapi_endpoint(app, graph, "/agent")
         log.info("agui_endpoint.mounted", path="/agent")

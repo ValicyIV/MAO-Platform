@@ -10,7 +10,7 @@
 // via updateNodeDimensions (no useUpdateNodeInternals / ResizeObserver for this node).
 
 import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { type NodeProps } from "@xyflow/react";
+import { type Node, type NodeProps } from "@xyflow/react";
 import { useStreamingStore } from "@/stores/streamingStore";
 import { useGraphStore } from "@/stores/graphStore";
 import { PretextService } from "@/services/PretextService";
@@ -25,7 +25,7 @@ const PRE_PADDING_V = 24;
 /** Approx. extra scroll extent for streaming cursor row below the pre */
 const CURSOR_SCROLL_EXTRA = 20;
 
-const ThinkingStreamNodeInner = ({ id }: NodeProps<ThinkingStreamNodeData>) => {
+const ThinkingStreamNodeInner = ({ id }: NodeProps<Node<ThinkingStreamNodeData>>) => {
   const textRef = useRef<HTMLPreElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const lastTextRef = useRef("");

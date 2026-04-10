@@ -20,8 +20,8 @@ import structlog
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.websockets import WebSocketState
 
-from src.streaming.event_mapper import StreamPartMapper
 from src.config.settings import settings
+from src.streaming.event_mapper import StreamPartMapper
 
 log = structlog.get_logger(__name__)
 router = APIRouter(tags=["WebSocket"])

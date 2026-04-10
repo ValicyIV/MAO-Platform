@@ -3,16 +3,16 @@
 // Badge color and label are driven by modelUtils — no hardcoded maps.
 
 import { memo } from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { useGraphStore } from "@/stores/graphStore";
 import { useIsExpanded } from "@/stores/selectors/graphSelectors";
 import { useAgentStatusStore } from "@/stores/agentStatusStore";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { AgentStatus } from "@mao/shared-types";
 import type { SpecialistNodeData } from "@mao/shared-types";
-import { modelBadgeClasses, modelDisplayName, providerLabel, detectProvider } from "@/utils/modelUtils";
+import { modelBadgeClasses, modelDisplayName, detectProvider } from "@/utils/modelUtils";
 
-export const SpecialistNode = memo(({ id, data }: NodeProps<SpecialistNodeData>) => {
+export const SpecialistNode = memo(({ id, data }: NodeProps<Node<SpecialistNodeData>>) => {
   const isExpanded   = useIsExpanded(id);
   const toggleExpand = useGraphStore((s) => s.toggleExpand);
 
@@ -79,9 +79,7 @@ export const SpecialistNode = memo(({ id, data }: NodeProps<SpecialistNodeData>)
               key={tool}
               className="text-xs px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 border border-neutral-700"
             >
-              {typeof tool === "string"
-                ? tool.replace(/_tool$/, "").replace(/_/g, " ")
-                : (tool as any)?.name ?? "tool"}
+              {tool.replace(/_tool$/, "").replace(/_/g, " ")}
             </span>
           ))}
           {data.tools.length > 3 && (

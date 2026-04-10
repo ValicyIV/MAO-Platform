@@ -8,11 +8,8 @@ Never expose these tools to agents that shouldn't have shell access.
 from __future__ import annotations
 
 import asyncio
-import subprocess
 import sys
 import tempfile
-import traceback
-from io import StringIO
 from pathlib import Path
 
 import structlog
@@ -54,7 +51,7 @@ async def python_repl_tool(code: str) -> str:
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(), timeout=EXEC_TIMEOUT
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             return f"Execution timed out after {EXEC_TIMEOUT}s"
 
@@ -104,7 +101,7 @@ async def bash_tool(command: str) -> str:
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(), timeout=EXEC_TIMEOUT
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             return f"Command timed out after {EXEC_TIMEOUT}s"
 

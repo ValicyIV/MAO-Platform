@@ -13,14 +13,14 @@ mounted automatically by add_langgraph_fastapi_endpoint() in main.py.
 from __future__ import annotations
 
 import json
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import structlog
 from fastapi import APIRouter
 from sse_starlette.sse import EventSourceResponse
 
-from src.streaming.event_mapper import StreamPartMapper
 from src.config.settings import settings
+from src.streaming.event_mapper import StreamPartMapper
 
 log = structlog.get_logger(__name__)
 router = APIRouter(tags=["SSE"])

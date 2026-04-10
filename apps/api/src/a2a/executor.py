@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import structlog
 from fastapi import APIRouter
@@ -60,8 +60,9 @@ async def a2a_task(agent_name: str, request: A2ATaskRequest) -> StreamingRespons
     A2A task endpoint — receives a task from an external agent and streams the response.
     Routes to the appropriate specialist agent internally.
     """
-    from src.agents.registry import build_agents
     from langchain_core.messages import HumanMessage
+
+    from src.agents.registry import build_agents
 
     if agent_name not in AGENT_CARDS:
         from fastapi import HTTPException
@@ -76,7 +77,7 @@ async def a2a_task(agent_name: str, request: A2ATaskRequest) -> StreamingRespons
         agents = await build_agents()
         agent = agents.get(agent_name)
         if not agent:
-            yield f'data: {{"type": "error", "message": "Agent not available"}}\n\n'.encode()
+            yield b'data: {"type": "error", "message": "Agent not available"}\n\n'
             return
 
         yield f'data: {{"type": "task_started", "taskId": "{task_id}"}}\n\n'.encode()

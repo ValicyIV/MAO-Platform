@@ -20,7 +20,7 @@ export function DetailPanel() {
   }
 
   const data = node.data;
-  const isSpecialist = data.level === NodeLevel.Specialist;
+  const isSpecialist = "level" in data && data.level === NodeLevel.Specialist;
 
   return (
     <div className="w-72 border-l border-neutral-800 bg-neutral-950 overflow-y-auto shrink-0">
@@ -65,11 +65,9 @@ export function DetailPanel() {
               <p className="text-xs text-neutral-500 mb-1">Tools ({sd.tools.length})</p>
               <div className="flex flex-wrap gap-1">
                 {sd.tools.map((tool) => (
-                  <span key={typeof tool === "string" ? tool : (tool as any).name}
+                  <span key={tool}
                     className="text-xs px-1 py-0.5 rounded bg-neutral-800 text-neutral-400 border border-neutral-700">
-                    {typeof tool === "string"
-                      ? tool.replace(/_tool$/, "")
-                      : (tool as any).name ?? "tool"}
+                    {tool.replace(/_tool$/, "")}
                   </span>
                 ))}
               </div>

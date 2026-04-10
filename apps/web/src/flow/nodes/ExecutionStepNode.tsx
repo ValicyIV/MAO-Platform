@@ -1,7 +1,7 @@
 // ExecutionStepNode.tsx — Level 3: Execution step / tool call node
 
 import { memo } from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { useGraphStore } from "@/stores/graphStore";
 import { useIsExpanded } from "@/stores/selectors/graphSelectors";
 import type { ExecutionStepNodeData, ToolCallNodeData } from "@mao/shared-types";
@@ -24,7 +24,7 @@ const STATUS_COLORS = {
 
 type StepNodeData = ExecutionStepNodeData | ToolCallNodeData;
 
-export const ExecutionStepNode = memo(({ id, data }: NodeProps<StepNodeData>) => {
+export const ExecutionStepNode = memo(({ id, data }: NodeProps<Node<StepNodeData>>) => {
   const isExpanded = useIsExpanded(id);
   const toggleExpand = useGraphStore((s) => s.toggleExpand);
 

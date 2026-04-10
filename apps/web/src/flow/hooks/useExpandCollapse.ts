@@ -10,7 +10,7 @@ import { useReactFlow } from "@xyflow/react";
 import { useGraphStore } from "@/stores/graphStore";
 
 export function useExpandCollapse() {
-  const { getNodes, getEdges, setNodes, setEdges } = useReactFlow();
+  const { getNodes, setNodes, setEdges } = useReactFlow();
   const toggleExpand = useGraphStore((s) => s.toggleExpand);
   const getDescendants = useGraphStore((s) => s.getDescendants);
   const expandedIds = useGraphStore((s) => s.expandedIds);

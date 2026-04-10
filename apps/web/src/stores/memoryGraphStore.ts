@@ -179,7 +179,7 @@ export const useMemoryGraphStore = create<MemoryGraphStore>()((set, get) => ({
 
   onEdgesChange: (changes) =>
     set((s) => ({
-      relationships: applyEdgeChanges(changes, s.relationships),
+      relationships: applyEdgeChanges(changes, s.relationships) as Edge<MemoryEdgeData>[],
     })),
 
   reset: () =>

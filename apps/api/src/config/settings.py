@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
-from typing import Annotated
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -166,7 +165,7 @@ class Settings(BaseSettings):
     kairos_daemon_enabled: bool = Field(default=False)
 
     @model_validator(mode="after")
-    def validate_at_least_one_provider(self) -> "Settings":
+    def validate_at_least_one_provider(self) -> Settings:
         """Warn at startup if no LLM provider key is configured."""
         if not self.anthropic_api_key and not self.openrouter_api_key:
             import logging
@@ -189,7 +188,7 @@ class Settings(BaseSettings):
 
 
     @model_validator(mode="after")
-    def validate_memory_tokens(self) -> "Settings":
+    def validate_memory_tokens(self) -> Settings:
         total = (
             self.memory_hot_cache_tokens
             + self.memory_semantic_tokens
@@ -204,7 +203,7 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def normalize_provider_backed_models(self) -> "Settings":
+    def normalize_provider_backed_models(self) -> Settings:
         self.default_model = self.resolve_model_for_available_providers(
             self.default_model,
             anthropic_fallback="claude-sonnet-4-6",

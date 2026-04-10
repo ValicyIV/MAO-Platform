@@ -1,14 +1,14 @@
 // OrchestratorNode.tsx — Level 1: Root orchestrator compound node
 
 import { memo } from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { useGraphStore } from "@/stores/graphStore";
 import { useIsExpanded } from "@/stores/selectors/graphSelectors";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { AgentStatus } from "@mao/shared-types";
 import type { OrchestratorNodeData } from "@mao/shared-types";
 
-export const OrchestratorNode = memo(({ id, data }: NodeProps<OrchestratorNodeData>) => {
+export const OrchestratorNode = memo(({ id, data }: NodeProps<Node<OrchestratorNodeData>>) => {
   const isExpanded = useIsExpanded(id);
   const toggleExpand = useGraphStore((s) => s.toggleExpand);
 
