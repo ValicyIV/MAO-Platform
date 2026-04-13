@@ -8,6 +8,7 @@ import {
   Background,
   Controls,
   MiniMap,
+  ConnectionMode,
   type NodeTypes,
   type EdgeTypes,
 } from "@xyflow/react";
@@ -81,9 +82,12 @@ export default function FlowCanvas({ viewMode }: FlowCanvasProps) {
       nodeTypes={workflowNodeTypes}
       edgeTypes={workflowEdgeTypes}
       onNodeClick={onNodeClick}
-      nodesDraggable={false}
+      nodesDraggable
       nodesConnectable={false}
       elementsSelectable
+      connectionMode={ConnectionMode.Loose}
+      fitView
+      fitViewOptions={{ padding: 0.3 }}
       minZoom={0.1}
       maxZoom={2}
       proOptions={{ hideAttribution: true }}

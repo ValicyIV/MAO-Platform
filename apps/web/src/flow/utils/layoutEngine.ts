@@ -10,16 +10,14 @@ import type { NodeDataUnion } from "@mao/shared-types";
 
 // ── ELK option sets ────────────────────────────────────────────────────────────
 
-/** Default compound hierarchical layout — used for the workflow graph. */
+/** Radial bubble layout — orchestrator at center, specialists in orbit. */
 export const WORKFLOW_ELK_OPTIONS: Record<string, string> = {
-  "elk.algorithm":                              "layered",
-  "elk.direction":                              "DOWN",
-  "elk.layered.spacing.nodeNodeBetweenLayers":  "60",
-  "elk.spacing.nodeNode":                       "30",
-  "elk.padding":                                "[top=40, left=24, bottom=24, right=24]",
-  "elk.hierarchyHandling":                      "INCLUDE_CHILDREN",
-  "elk.layered.considerModelOrder.strategy":    "NODES_AND_EDGES",
-  "elk.layered.crossingMinimization.strategy":  "LAYER_SWEEP",
+  "elk.algorithm":                  "radial",
+  "elk.radial.centerOnRoot":        "true",
+  "elk.radial.orderId":             "1",
+  "elk.radial.compactor":           "WEDGE_COMPACTION",
+  "elk.spacing.nodeNode":           "60",
+  "elk.padding":                    "[top=60, left=60, bottom=60, right=60]",
 };
 
 /** Force-directed layout for the memory knowledge graph. */
@@ -58,14 +56,22 @@ export async function computeLayout(
     return { nodes, edges };
   }
 
-  // Build ELK graph — only top-level nodes at the root;
-  // ELK handles children via INCLUDE_CHILDREN hierarchyHandling.
+  // Radial layout: flat graph — all nodes at top level, edges define ring distance.
+  // (Radial algorithm doesn't support INCLUDE_CHILDREN.)
+  const isRadial = (options["elk.algorithm"] ?? "").toLowerCase() === "radial";
+
   const elkGraph: ElkNode = {
     id: "root",
     layoutOptions: options,
-    children: visibleNodes
-      .filter((n) => !n.parentId)
-      .map((n) => buildElkNode(n, visibleNodes)),
+    children: isRadial
+      ? visibleNodes.map((n) => ({
+          id: n.id,
+          width: n.width ?? 176,
+          height: n.height ?? 120,
+        }))
+      : visibleNodes
+          .filter((n) => !n.parentId)
+          .map((n) => buildElkNode(n, visibleNodes)),
     edges: visibleEdges.map((e) => ({
       id: e.id,
       sources: [e.source],

@@ -71,6 +71,8 @@ export interface SpecialistNodeData extends Record<string, unknown> {
   agentId: string;
   agentName: string;
   emoji?: string;
+  currentTopic: string | null;
+  topicReason?: string | null;
   role: AgentRole;
   model: ModelTier;
   tools: string[];

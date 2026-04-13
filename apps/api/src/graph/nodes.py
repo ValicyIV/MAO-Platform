@@ -44,7 +44,7 @@ async def agent_node(
     from src.persistence.memory_retriever import get_context
     from src.persistence.memory_store import append_episode
 
-    task = state.get("task", "")
+    task = state.get("active_task") or state.get("task", "")
 
     # Inject memory context (Pattern 15)
     memory_ctx = await get_context(agent_id, task)
@@ -66,13 +66,25 @@ async def agent_node(
         result = await agent.ainvoke(sub_state)
         output = _extract_output(result)
 
-        # Append to episode log
+        # Append LLM output to episode log
         await append_episode(
             agent_id,
             "llm_call",
             output[:500],
             workflow_id=state.get("workflow_id", ""),
         )
+
+        # Log individual tool calls so procedural memory (Stage 3) can detect patterns
+        for msg in (result.get("messages", []) if isinstance(result, dict) else []):
+            if hasattr(msg, "tool_calls"):
+                for tc in (msg.tool_calls or []):
+                    await append_episode(
+                        agent_id,
+                        "tool_call",
+                        f"Called {tc.get('name', 'unknown')}: {str(tc.get('args', ''))[:200]}",
+                        workflow_id=state.get("workflow_id", ""),
+                        toolName=tc.get("name", ""),
+                    )
 
         if writer:
             await _emit_writer_event(writer, {

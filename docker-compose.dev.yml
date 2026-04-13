@@ -23,17 +23,17 @@ services:
 
   web:
     # Vite dev server with HMR — replaces the nginx prod build.
-    image: node:20-alpine
+    image: node:20
     working_dir: /workspace
     # Install deps if missing, then start Vite for the web app only.
     command: >
       sh -c "
-        corepack enable pnpm &&
+        npm install -g pnpm &&
         pnpm install 2>&1 | tail -5 &&
         pnpm --filter @mao/web dev --host 0.0.0.0 --port 5173
       "
     ports:
-      - "5173:5173"
+      - "3000:5173"
     volumes:
       # Mount the entire monorepo root at /workspace.
       # This keeps the tsconfig path aliases intact:
@@ -44,8 +44,8 @@ services:
       - web_app_node_modules:/workspace/apps/web/node_modules
       - web_shared_node_modules:/workspace/packages/shared-types/node_modules
     environment:
-      VITE_API_URL: http://localhost:8000
-      VITE_WS_URL: ws://localhost:8000
+      VITE_API_URL: http://api:8000
+      VITE_WS_URL: ws://api:8000
     # In dev, don't wait for the API — start Vite immediately so you can work on the UI
     # even if the backend isn't healthy yet. The WS connection will reconnect automatically.
     depends_on: {}

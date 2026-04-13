@@ -16,6 +16,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END
 
+from src.agents.model_router import ModelProvider, detect_provider
 from src.config.settings import settings
 from src.graph.state import OrchestratorState
 
@@ -67,6 +68,11 @@ async def _emit_writer_event(writer: Any, payload: dict[str, Any]) -> None:
         await result
 
 
+# Hard ceiling on supervisor→specialist round-trips.
+# Prevents runaway recursion when the LLM keeps routing without completing.
+MAX_SUPERVISOR_ITERATIONS = 12
+
+
 async def supervisor_node(
     state: OrchestratorState,
     writer: Any = None,
@@ -76,11 +82,34 @@ async def supervisor_node(
 
     Uses the supervisor model from the registry — defaults to claude-opus-4-6
     but can be changed to any OpenRouter or Ollama model by updating registry.py.
+
+    Includes an iteration guard: after MAX_SUPERVISOR_ITERATIONS cycles the
+    workflow is forcibly completed to avoid hitting the LangGraph recursion limit.
     """
     from src.agents.model_router import get_chat_model
     from src.agents.registry import get_agent_configs
     from src.config.prompts import get_prompt
     from src.persistence.memory_retriever import get_context
+
+    # ── Iteration guard ───────────────────────────────────────────────────────
+    iteration = state.get("iteration_count", 0) + 1
+    if iteration > MAX_SUPERVISOR_ITERATIONS:
+        logger.warning(
+            "supervisor.max_iterations_reached count=%d — force-completing",
+            iteration,
+        )
+        return {
+            "next":            END,
+            "is_complete":     True,
+            "iteration_count": iteration,
+            "agent_outputs":   {
+                "supervisor": (
+                    f"Workflow automatically completed after {iteration} supervisor "
+                    f"cycles to prevent infinite recursion. Partial results from "
+                    f"{len(state.get('agent_outputs', {}))} agents are available."
+                ),
+            },
+        }
 
     # Get supervisor model from registry (respects any model ID format)
     supervisor_cfg = get_agent_configs().get("supervisor")
@@ -117,7 +146,10 @@ async def supervisor_node(
     ]
 
     # Bind routing tools — LangChain translates to provider-native tool format
-    llm_with_tools = llm.bind_tools([ROUTE_TOOL, COMPLETE_TOOL], tool_choice="any")
+    # tool_choice differs by provider: Anthropic uses "any", OpenAI/OpenRouter uses "required"
+    provider = detect_provider(model_id)
+    tc = "any" if provider == ModelProvider.ANTHROPIC else "required"
+    llm_with_tools = llm.bind_tools([ROUTE_TOOL, COMPLETE_TOOL], tool_choice=tc)
 
     # Langfuse callback
     invoke_config: dict[str, Any] = {}
@@ -150,18 +182,32 @@ async def supervisor_node(
                     },
                 })
 
-            logger.info("supervisor.routing to=%s reason=%s", target, reason[:60])
-            return {"next": target, "current_agent": "supervisor"}
+            logger.info("supervisor.routing to=%s reason=%s iteration=%d", target, reason[:60], iteration)
+            return {
+                "next": target,
+                "current_agent": "supervisor",
+                "iteration_count": iteration,
+                "active_task": task_for_agent,
+            }
 
         if name == "complete_workflow":
+            # Guard: don't allow completion before any specialist has run
+            if not agent_outputs:
+                logger.warning(
+                    "supervisor.premature_completion — no specialist outputs yet, "
+                    "forcing route to research. iteration=%d", iteration,
+                )
+                return {"next": "research", "current_agent": "supervisor", "iteration_count": iteration}
+
             summary = args.get("summary", "")
-            logger.info("supervisor.completing summary=%s", summary[:80])
+            logger.info("supervisor.completing summary=%s iteration=%d", summary[:80], iteration)
             return {
-                "next":         END,
-                "is_complete":  True,
-                "agent_outputs": {"supervisor": summary},
+                "next":           END,
+                "is_complete":    True,
+                "iteration_count": iteration,
+                "agent_outputs":  {"supervisor": summary},
             }
 
     # No tool call produced — end gracefully
-    logger.warning("supervisor.no_tool_call — ending workflow")
-    return {"next": END, "is_complete": True}
+    logger.warning("supervisor.no_tool_call — ending workflow iteration=%d", iteration)
+    return {"next": END, "is_complete": True, "iteration_count": iteration}

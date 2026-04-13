@@ -13,6 +13,7 @@ import { useGraphStore } from "@/stores/graphStore";
 import { useStreamingStore } from "@/stores/streamingStore";
 import { useAgentStatusStore } from "@/stores/agentStatusStore";
 import { useMemoryGraphStore } from "@/stores/memoryGraphStore";
+import { useConversationStore } from "@/stores/conversationStore";
 import { NodeType, NodeLevel, type NodeDataUnion } from "@mao/shared-types";
 import type { Node } from "@xyflow/react";
 
@@ -40,6 +41,10 @@ export class AGUIEventRouter {
   // Buffers pending token batches per node — flushed once per RAF frame
   private tokenBuffers = new Map<NodeId, string>();
   private rafId: number | null = null;
+  // Conversation store: separate buffer for text (batched at RAF rate)
+  private convoTokenBuffers = new Map<string, { agentId: string; text: string }>();
+  // Map nodeId → { agentId, messageId } for events that don’t carry agentId
+  private convoNodeMap = new Map<string, { agentId: string; messageId: string }>();
 
   constructor() {
     this._startRAFLoop();
@@ -51,6 +56,8 @@ export class AGUIEventRouter {
       this.rafId = null;
     }
     this.tokenBuffers.clear();
+    this.convoTokenBuffers.clear();
+    this.convoNodeMap.clear();
   }
 
   // ── Main dispatch ───────────────────────────────────────────────────────────
@@ -95,6 +102,7 @@ export class AGUIEventRouter {
     const graphStore = useGraphStore.getState();
     const streamingStore = useStreamingStore.getState();
     const statusStore = useAgentStatusStore.getState();
+    const convoStore = useConversationStore.getState();
 
     switch (event.type) {
       // ── Lifecycle ────────────────────────────────────────────────────────────
@@ -103,15 +111,26 @@ export class AGUIEventRouter {
         this._ensureWorkflowRoot(ev.runId ?? ev.workflowId ?? "workflow");
         statusStore.setStatus(ev.agentId, AgentStatus.Running);
         this._ensureSpecialistNode(ev);
+        // Conversation store: register agent with metadata
+        convoStore.registerAgent(ev.agentId, {
+          agentName: ev.agentName ?? ev.agentId,
+          role: ev.role ?? ev.agentId,
+          model: ev.model ?? "",
+          tools: ev.tools ?? [],
+        });
+        convoStore.setAgentStatus(ev.agentId, "running");
+        convoStore.setWorkflowStatus("running");
         break;
       }
 
       case "RUN_FINISHED":
         statusStore.setStatus(event.agentId, AgentStatus.Complete);
+        convoStore.setAgentStatus(event.agentId, "complete");
         break;
 
       case "RUN_ERROR":
         statusStore.setError(event.agentId, event.error);
+        convoStore.setAgentStatus(event.agentId, "error");
         break;
 
       // ── Steps ────────────────────────────────────────────────────────────────
@@ -138,23 +157,46 @@ export class AGUIEventRouter {
           320 // default node width — updated by ThinkingStreamNode on mount
         );
         this._ensureThinkingNode(event.nodeId, event.stepId ?? event.agentId, event.agentId);
+        // Conversation store: start a message under this agent
+        convoStore.startMessage(event.agentId, event.messageId, event.isThinking);
+        // Track nodeId → agent/message for events that lack agentId
+        this.convoNodeMap.set(event.nodeId, { agentId: event.agentId, messageId: event.messageId });
         break;
 
-      case "TEXT_MESSAGE_CONTENT":
+      case "TEXT_MESSAGE_CONTENT": {
         this._bufferToken(event.nodeId, event.delta);
+        // Conversation store: buffer text using nodeId lookup
+        const contentMeta = this.convoNodeMap.get(event.nodeId);
+        if (contentMeta) {
+          this._bufferConvoToken(contentMeta.messageId, contentMeta.agentId, event.delta);
+        }
         break;
+      }
 
-      case "TEXT_MESSAGE_END":
+      case "TEXT_MESSAGE_END": {
         // Flush any remaining buffer immediately
         this._flushNode(event.nodeId);
         streamingStore.endStream(event.nodeId);
+        // Conversation store: flush and end
+        const endMeta = this.convoNodeMap.get(event.nodeId);
+        if (endMeta) {
+          this._flushConvoNode(endMeta.messageId, endMeta.agentId);
+          convoStore.endMessage(endMeta.agentId, endMeta.messageId);
+        }
         break;
+      }
 
       // ── Tool calls ───────────────────────────────────────────────────────────
       case "TOOL_CALL_START":
         this._ensureWorkflowRoot(event.runId);
         this._ensureAgentShell(event.agentId);
         this._ensureToolCallNode(event.toolCallId, event.nodeId, event.agentId, event.toolName);
+        // Conversation store: register tool call under current message
+        convoStore.startToolCall(event.agentId, event.toolCallId, event.toolName);
+        break;
+
+      case "TOOL_CALL_ARGS":
+        convoStore.updateToolCallArgs(event.toolCallId, event.delta);
         break;
 
       case "TOOL_CALL_END":
@@ -162,6 +204,7 @@ export class AGUIEventRouter {
           status: event.status,
           durationMs: event.durationMs,
         } as Partial<NodeDataUnion>);
+        convoStore.endToolCall(event.toolCallId, event.result, event.status, event.durationMs);
         break;
 
       // ── State ────────────────────────────────────────────────────────────────
@@ -190,20 +233,40 @@ export class AGUIEventRouter {
         const p = payload as MAOEventPayloadMap["thinking_delta"];
         // Thinking tokens go through the same RAF buffer
         this._bufferToken(p.nodeId, p.delta);
+        // Conversation store: append thinking block
+        const thinkMeta = this.convoNodeMap.get(p.nodeId);
+        if (thinkMeta) {
+          useConversationStore.getState().appendThinking(thinkMeta.agentId, thinkMeta.messageId, p.delta);
+        }
         break;
       }
 
       case MAO_EVENTS.AGENT_HANDOFF: {
         const p = payload as MAOEventPayloadMap["agent_handoff"];
         const graphStore = useGraphStore.getState();
+        this._ensureWorkflowRoot(event.runId);
+        this._ensureAgentShell(p.toAgentId);
         graphStore.addEdge({
           id: `handoff-${p.fromAgentId}-${p.toAgentId}-${Date.now()}`,
           source: p.fromAgentId,
           target: p.toAgentId,
           type: "handoff",
           animated: true,
-          label: p.reason?.slice(0, 40),
+          label: undefined,
         });
+        graphStore.updateNodeData(p.toAgentId, {
+          currentTopic: p.task,
+          topicReason: p.reason,
+        } as Partial<NodeDataUnion>);
+        // Conversation store: create a new topic under the target agent
+        useConversationStore.getState().addTopic(p.toAgentId, {
+          id: `topic-${p.toAgentId}-${Date.now()}`,
+          task: p.task,
+          reason: p.reason,
+          fromAgentId: p.fromAgentId,
+          startedAt: Date.now(),
+        });
+        graphStore.bumpLayout();
         break;
       }
 
@@ -227,6 +290,10 @@ export class AGUIEventRouter {
 
   private _handleStatus(msg: Extract<ServerMessage, { type: "status" }>): void {
     console.debug("[Router] workflow status:", msg.status, msg.workflowId);
+    const convoStore = useConversationStore.getState();
+    if (msg.status === "complete") convoStore.setWorkflowStatus("complete");
+    else if (msg.status === "error") convoStore.setWorkflowStatus("error");
+    else if (msg.status === "started" || msg.status === "running") convoStore.setWorkflowStatus("running");
   }
 
   // ── RAF token batching (Pattern 11) ─────────────────────────────────────────
@@ -239,13 +306,18 @@ export class AGUIEventRouter {
   private _startRAFLoop(): void {
     const flush = () => {
       this.rafId = requestAnimationFrame(flush);
-      if (this.tokenBuffers.size === 0) return;
 
-      const streamingStore = useStreamingStore.getState();
-      for (const [nodeId, batch] of this.tokenBuffers) {
-        streamingStore.appendBatch(nodeId, batch);
+      // Flush graph streaming tokens
+      if (this.tokenBuffers.size > 0) {
+        const streamingStore = useStreamingStore.getState();
+        for (const [nodeId, batch] of this.tokenBuffers) {
+          streamingStore.appendBatch(nodeId, batch);
+        }
+        this.tokenBuffers.clear();
       }
-      this.tokenBuffers.clear();
+
+      // Flush conversation store tokens (same RAF cadence)
+      this._flushConvoBuffers();
     };
     this.rafId = requestAnimationFrame(flush);
   }
@@ -258,6 +330,34 @@ export class AGUIEventRouter {
     }
   }
 
+  // ── Conversation store token batching (same RAF cadence) ───────────────────
+
+  private _bufferConvoToken(messageId: string, agentId: string, delta: string): void {
+    const existing = this.convoTokenBuffers.get(messageId);
+    if (existing) {
+      existing.text += delta;
+    } else {
+      this.convoTokenBuffers.set(messageId, { agentId, text: delta });
+    }
+  }
+
+  private _flushConvoBuffers(): void {
+    if (this.convoTokenBuffers.size === 0) return;
+    const convoStore = useConversationStore.getState();
+    for (const [messageId, { agentId, text }] of this.convoTokenBuffers) {
+      convoStore.appendMessageText(agentId, messageId, text);
+    }
+    this.convoTokenBuffers.clear();
+  }
+
+  private _flushConvoNode(messageId: string, _agentId: string): void {
+    const entry = this.convoTokenBuffers.get(messageId);
+    if (entry) {
+      useConversationStore.getState().appendMessageText(entry.agentId, messageId, entry.text);
+      this.convoTokenBuffers.delete(messageId);
+    }
+  }
+
   // ── Node creation helpers ────────────────────────────────────────────────────
 
   private _ensureWorkflowRoot(workflowId: string): void {
@@ -267,6 +367,8 @@ export class AGUIEventRouter {
       id: WORKFLOW_ROOT_ID,
       type: NodeType.Orchestrator,
       position: { x: 0, y: 0 },
+      width: 160,
+      height: 160,
       data: {
         level: NodeLevel.Orchestrator,
         workflowId: workflowId || "workflow",
@@ -290,11 +392,15 @@ export class AGUIEventRouter {
     const node: Node<NodeDataUnion> = {
       id: agentId,
       type: NodeType.Specialist,
-      position: { x: 0, y: 0 }, // ELK will position
+      position: { x: 0, y: 0 }, // ELK radial will position
+      width: 220,
+      height: 120,
       data: {
         level: NodeLevel.Specialist,
         agentId,
         agentName: agentName ?? agentId,
+        currentTopic: null,
+        topicReason: null,
         role: coerceAgentRole(role),
         model: (model ?? "unknown") as any,
         tools: tools ?? [],
@@ -320,16 +426,32 @@ export class AGUIEventRouter {
 
   private _ensureAgentShell(agentId: string): void {
     const normalized = (agentId || "unknown").trim() || "unknown";
-    const { nodes, addNode } = useGraphStore.getState();
-    if (nodes.find((n) => n.id === normalized)) return;
+    if (normalized === "unknown") return;
+    const { nodes, addNode, addEdge, updateNodeData, bumpLayout } = useGraphStore.getState();
+    const existing = nodes.find((n) => n.id === normalized);
+    if (existing) return;
+    const rootExists = nodes.some((n) => n.id === WORKFLOW_ROOT_ID);
+    if (rootExists) {
+      addEdge({
+        id: `${WORKFLOW_ROOT_ID}-${normalized}`,
+        source: WORKFLOW_ROOT_ID,
+        target: normalized,
+        type: "agentFlow",
+        hidden: false,
+      });
+    }
     const node: Node<NodeDataUnion> = {
       id: normalized,
       type: NodeType.Specialist,
       position: { x: 0, y: 0 },
+      width: 220,
+      height: 120,
       data: {
         level: NodeLevel.Specialist,
         agentId: normalized,
         agentName: normalized === "unknown" ? "Agent" : normalized,
+        currentTopic: null,
+        topicReason: null,
         role: coerceAgentRole(normalized),
         model: "unknown" as any,
         tools: [],
@@ -340,7 +462,12 @@ export class AGUIEventRouter {
       },
     };
     addNode(node);
-    useGraphStore.getState().bumpLayout();
+    if (rootExists) {
+      updateNodeData(WORKFLOW_ROOT_ID, {
+        agentCount: useGraphStore.getState().nodes.filter((n) => n.type === NodeType.Specialist).length,
+      } as Partial<NodeDataUnion>);
+    }
+    bumpLayout();
   }
 
   private _ensureStepNode(stepId: string, agentId: string, stepType: string, stepName: string): void {
@@ -351,7 +478,7 @@ export class AGUIEventRouter {
       id: stepId,
       type: NodeType.ExecutionStep,
       position: { x: 0, y: 0 },
-      hidden: false,
+      hidden: true,
       data: {
         level: NodeLevel.ExecutionStep,
         stepId,
@@ -372,9 +499,8 @@ export class AGUIEventRouter {
       source: agentId,
       target: stepId,
       type: "agentFlow",
-      hidden: false,
+      hidden: true,
     });
-    useGraphStore.getState().bumpLayout();
   }
 
   private _ensureThinkingNode(nodeId: string, parentStepId: string, agentId: string): void {
@@ -385,7 +511,7 @@ export class AGUIEventRouter {
       id: nodeId,
       type: NodeType.ThinkingStream,
       position: { x: 0, y: 0 },
-      hidden: false,
+      hidden: true,
       data: {
         level: NodeLevel.ThinkingStream,
         stepId: parentStepId,
@@ -401,9 +527,8 @@ export class AGUIEventRouter {
       source: parentStepId,
       target: nodeId,
       type: "agentFlow",
-      hidden: false,
+      hidden: true,
     });
-    useGraphStore.getState().bumpLayout();
   }
 
   private _ensureToolCallNode(
@@ -419,7 +544,7 @@ export class AGUIEventRouter {
       id: nodeId,
       type: NodeType.ToolCall,
       position: { x: 0, y: 0 },
-      hidden: false,
+      hidden: true,
       data: {
         level: NodeLevel.ExecutionStep,
         stepId: toolCallId,
@@ -440,8 +565,7 @@ export class AGUIEventRouter {
       source: agentId,
       target: nodeId,
       type: "toolCall",
-      hidden: false,
+      hidden: true,
     });
-    useGraphStore.getState().bumpLayout();
   }
 }

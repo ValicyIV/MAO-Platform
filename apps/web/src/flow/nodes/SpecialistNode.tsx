@@ -1,110 +1,64 @@
-// SpecialistNode.tsx — Level 2: Per-agent specialist node
-// Supports any model ID: Anthropic, OpenRouter, Ollama (local).
-// Badge color and label are driven by modelUtils — no hardcoded maps.
+// SpecialistNode.tsx — Minimal workflow bubble for specialist agents.
+// The canvas stays high-level: agent name + delegated topic only.
 
 import { memo } from "react";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { useGraphStore } from "@/stores/graphStore";
-import { useIsExpanded } from "@/stores/selectors/graphSelectors";
 import { useAgentStatusStore } from "@/stores/agentStatusStore";
-import { StatusBadge } from "@/components/ui/StatusBadge";
 import { AgentStatus } from "@mao/shared-types";
 import type { SpecialistNodeData } from "@mao/shared-types";
-import { modelBadgeClasses, modelDisplayName, detectProvider } from "@/utils/modelUtils";
 
-export const SpecialistNode = memo(({ id, data }: NodeProps<Node<SpecialistNodeData>>) => {
-  const isExpanded   = useIsExpanded(id);
-  const toggleExpand = useGraphStore((s) => s.toggleExpand);
+export const SpecialistNode = memo(({ data }: NodeProps<Node<SpecialistNodeData>>) => {
+  const liveStatus = useAgentStatusStore((s) => s.statuses[data.agentId]);
+  const status = liveStatus?.status ?? data.status;
+  const topic = data.currentTopic?.trim() || "Waiting for topic";
 
-  // Subscribe to live status for this specific agent only — isolated selector
-  const liveStatus  = useAgentStatusStore((s) => s.statuses[data.agentId]);
-  const status      = liveStatus?.status ?? data.status;
-  const currentStep = liveStatus?.currentStep ?? data.currentStep;
-  const tokenCount  = liveStatus?.tokenCount ?? data.tokenCount;
+  const borderColor =
+    status === AgentStatus.Running || status === AgentStatus.Thinking
+      ? "border-blue-500/60 shadow-blue-500/20"
+      : status === AgentStatus.Error
+      ? "border-red-500/50 shadow-red-500/15"
+      : status === AgentStatus.Complete
+      ? "border-emerald-500/40 shadow-emerald-500/15"
+      : "border-neutral-700 shadow-neutral-900";
 
-  const badgeClasses  = modelBadgeClasses(data.model);
-  const displayName   = modelDisplayName(data.model);
-  const provider      = detectProvider(data.model);
-  const isLocal       = provider === "ollama";
+  const dotColor =
+    status === AgentStatus.Running || status === AgentStatus.Thinking
+      ? "bg-blue-400"
+      : status === AgentStatus.Error
+      ? "bg-red-400"
+      : status === AgentStatus.Complete
+      ? "bg-emerald-400"
+      : "bg-neutral-500";
 
   return (
     <div
       className={[
-        "specialist-node min-w-60 rounded-lg border bg-neutral-900 shadow-md transition-colors",
-        status === AgentStatus.Running || status === AgentStatus.Thinking
-          ? "border-blue-500/50"
-          : status === AgentStatus.Error
-          ? "border-red-500/50"
-          : status === AgentStatus.Complete
-          ? "border-emerald-500/30"
-          : "border-neutral-700",
+        "specialist-node w-56 rounded-[1.6rem] border-2 bg-neutral-900 shadow-lg transition-all",
+        "px-4 py-3",
+        borderColor,
       ].join(" ")}
     >
-      <div className="px-3 py-2.5">
-        {/* Header row */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            {data.emoji && <span className="text-lg shrink-0">{data.emoji}</span>}
-            <StatusBadge status={status} size="sm" />
-            <span className="font-medium text-sm text-neutral-200 truncate">
-              {data.agentName}
-            </span>
-          </div>
-          <button
-            className="nodrag shrink-0 text-neutral-500 hover:text-neutral-200 transition-colors text-xs"
-            onClick={() => toggleExpand(id)}
-            title={isExpanded ? "Collapse steps" : "Expand steps"}
-          >
-            {isExpanded ? "▲" : "▼"}
-          </button>
-        </div>
-
-        {/* Model badge row */}
-        <div className="mt-2 flex flex-wrap gap-1 items-center">
-          {/* Model badge — works for any provider */}
-          <span className={`text-xs px-1.5 py-0.5 rounded border font-mono ${badgeClasses}`}>
-            {displayName}
-          </span>
-
-          {/* Local indicator */}
-          {isLocal && (
-            <span className="text-xs px-1.5 py-0.5 rounded bg-green-900/30 text-green-400 border border-green-700/40">
-              local
-            </span>
-          )}
-
-          {/* Tool badges */}
-          {data.tools.slice(0, 3).map((tool) => (
-            <span
-              key={tool}
-              className="text-xs px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-400 border border-neutral-700"
-            >
-              {tool.replace(/_tool$/, "").replace(/_/g, " ")}
-            </span>
-          ))}
-          {data.tools.length > 3 && (
-            <span className="text-xs text-neutral-600">+{data.tools.length - 3}</span>
-          )}
-        </div>
-
-        {/* Current step + token count */}
-        <div className="mt-2 flex items-center justify-between gap-2">
-          {currentStep ? (
-            <p className="text-xs text-neutral-500 truncate flex-1">↳ {currentStep}</p>
-          ) : (
-            <span />
-          )}
-          {tokenCount > 0 && (
-            <span className="text-xs text-neutral-600 shrink-0 tabular-nums">
-              {tokenCount.toLocaleString()} tok
-            </span>
-          )}
-        </div>
+      <div className="flex items-center gap-2">
+        <span className={`h-2.5 w-2.5 rounded-full ${dotColor}`} />
+        <span className="font-semibold text-sm text-neutral-100 leading-tight">
+          {data.agentName}
+        </span>
       </div>
 
-      <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Bottom} />
+      <p className="mt-2 text-[11px] leading-4 text-neutral-400 line-clamp-4">
+        {topic}
+      </p>
+
+      <Handle type="target" position={Position.Top} id="tgt-top" className="opacity-0" />
+      <Handle type="target" position={Position.Right} id="tgt-right" className="opacity-0" />
+      <Handle type="target" position={Position.Bottom} id="tgt-bottom" className="opacity-0" />
+      <Handle type="target" position={Position.Left} id="tgt-left" className="opacity-0" />
+      <Handle type="source" position={Position.Top} id="src-top" className="opacity-0" />
+      <Handle type="source" position={Position.Right} id="src-right" className="opacity-0" />
+      <Handle type="source" position={Position.Bottom} id="src-bottom" className="opacity-0" />
+      <Handle type="source" position={Position.Left} id="src-left" className="opacity-0" />
     </div>
   );
 });
+
 SpecialistNode.displayName = "SpecialistNode";

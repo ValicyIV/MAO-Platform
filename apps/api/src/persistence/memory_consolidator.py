@@ -187,7 +187,7 @@ class MemoryConsolidator:
 
         prompt = get_prompt(
             "consolidation",
-            agent_role=agent_id,
+            role_name=agent_id,
             current_memory=current_facts,
             episodes=episodes_text[:6000],
             days=str(settings.memory_consolidation_batch_days),

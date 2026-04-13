@@ -62,6 +62,8 @@ export function makeSpecialistNode(
       status: AgentStatus.Idle,
       tokenCount: 0,
       expanded: false,
+      currentTopic: null,
+      topicReason: null,
       currentStep: null,
     },
     width: NODE_WIDTH,

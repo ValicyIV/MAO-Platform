@@ -9,13 +9,12 @@ import { useGraphStore } from "@/stores/graphStore";
 const elk = new ELK();
 
 const ELK_OPTIONS: Record<string, string> = {
-  "elk.algorithm": "layered",
-  "elk.direction": "DOWN",
-  "elk.layered.spacing.nodeNodeBetweenLayers": "60",
-  "elk.spacing.nodeNode": "30",
-  "elk.padding": "[top=40, left=24, bottom=24, right=24]",
-  "elk.hierarchyHandling": "INCLUDE_CHILDREN",
-  "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+  "elk.algorithm":                  "radial",
+  "elk.radial.centerOnRoot":        "true",
+  "elk.radial.orderId":             "1",
+  "elk.radial.compactor":           "WEDGE_COMPACTION",
+  "elk.spacing.nodeNode":           "60",
+  "elk.padding":                    "[top=60, left=60, bottom=60, right=60]",
 };
 
 export function useAutoLayout(layoutVersion: number) {
@@ -32,23 +31,15 @@ export function useAutoLayout(layoutVersion: number) {
       if (visibleNodes.length === 0) return;
 
       try {
+        // Radial layout: flat graph — all nodes at top level, edges define ring distance
         const elkGraph: ElkNode = {
           id: "root",
           layoutOptions: ELK_OPTIONS,
-          children: visibleNodes
-            .filter((n) => !n.parentId) // top-level only — ELK handles children
-            .map((n) => ({
-              id: n.id,
-              width: n.width ?? 320,
-              height: n.height ?? 80,
-              children: visibleNodes
-                .filter((child) => child.parentId === n.id)
-                .map((child) => ({
-                  id: child.id,
-                  width: child.width ?? 320,
-                  height: child.height ?? 80,
-                })),
-            })),
+          children: visibleNodes.map((n) => ({
+            id: n.id,
+            width: n.width ?? 176,
+            height: n.height ?? 120,
+          })),
           edges: visibleEdges.map((e) => ({
             id: e.id,
             sources: [e.source],
@@ -59,12 +50,7 @@ export function useAutoLayout(layoutVersion: number) {
         const layout = await elk.layout(elkGraph);
         const positionedNodes = Object.fromEntries(
           visibleNodes.map((node) => {
-            const found =
-              layout.children?.find((c) => c.id === node.id) ??
-              layout.children
-                ?.flatMap((c) => c.children ?? [])
-                .find((c) => c.id === node.id);
-
+            const found = layout.children?.find((c) => c.id === node.id);
             return [
               node.id,
               {

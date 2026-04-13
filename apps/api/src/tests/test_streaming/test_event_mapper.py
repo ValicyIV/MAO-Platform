@@ -171,6 +171,41 @@ def test_custom_writer_event_passes_through(mapper):
     assert events[0]["runId"] == WORKFLOW_ID
 
 
+def test_supervisor_chain_stream_emits_agent_handoff(mapper):
+    events = mapper.map({
+        "event": "on_chain_stream",
+        "metadata": {"langgraph_node": "supervisor", "langgraph_step": 1},
+        "data": {
+            "chunk": {
+                "next": "research",
+                "active_task": "Investigate the latest project status for the specialists.",
+            }
+        },
+    })
+    assert len(events) == 1
+    assert events[0]["type"] == "CUSTOM"
+    assert events[0]["customType"] == "agent_handoff"
+    assert events[0]["payload"]["toAgentId"] == "research"
+    assert events[0]["payload"]["task"] == "Investigate the latest project status for the specialists."
+
+
+def test_agent_id_can_be_recovered_from_checkpoint_namespace(mapper):
+    events = mapper.map({
+        "event": "on_chat_model_stream",
+        "metadata": {
+            "langgraph_checkpoint_ns": "research:abc123|agent:def456",
+        },
+        "data": {
+            "run_id": "run-research-1",
+            "chunk": {"content": [{"type": "text", "text": "Found a source"}]},
+        },
+    })
+    assert events[0]["type"] == "RUN_STARTED"
+    assert events[0]["agentId"] == "research"
+    assert events[1]["type"] == "TEXT_MESSAGE_START"
+    assert events[1]["agentId"] == "research"
+
+
 # ── run_id → node_id mapping consistency ─────────────────────────────────────
 
 def test_tool_start_end_same_node_id(mapper):

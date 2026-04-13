@@ -172,6 +172,7 @@ class ConnectionManager:
         config: dict[str, Any] = {
             "configurable": {"thread_id": workflow_id},
             "run_name": f"workflow_{workflow_id}",
+            "recursion_limit": 50,  # bumped from default 25; iteration guard in supervisor is the real safety net
         }
         if settings.langfuse_enabled:
             config["callbacks"] = [get_handler()]
@@ -190,6 +191,7 @@ class ConnectionManager:
                     "needs_verification": False,
                     "completed_agents": [],
                     "last_error": None,
+                    "iteration_count": 0,
                 },
                 config=config,
                 version="v2",

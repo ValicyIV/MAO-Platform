@@ -7,6 +7,7 @@ import { AgentConfigPanel } from "@/components/panels/AgentConfigPanel";
 import { useActiveStreamCount } from "@/stores/selectors/streamingSelectors";
 import { useMemoryGraphStore } from "@/stores/memoryGraphStore";
 import { useGraphStore } from "@/stores/graphStore";
+import { useConversationStore } from "@/stores/conversationStore";
 
 interface ToolbarProps {
   viewMode: ViewMode;
@@ -22,6 +23,7 @@ export function Toolbar({ viewMode, onViewModeChange, workflowId, onWorkflowStar
   const activeStreams = useActiveStreamCount();
   const conflictCount = useMemoryGraphStore((s) => s.conflictCount);
   const resetGraph = useGraphStore((s) => s.reset);
+  const resetConvo = useConversationStore((s) => s.reset);
 
   const handleRun = () => {
     if (!task.trim()) return;
@@ -46,6 +48,16 @@ export function Toolbar({ viewMode, onViewModeChange, workflowId, onWorkflowStar
           }`}
         >
           Workflow
+        </button>
+        <button
+          onClick={() => onViewModeChange("conversation")}
+          className={`px-3 py-1.5 border-r border-neutral-700 transition-colors ${
+            viewMode === "conversation"
+              ? "bg-emerald-600 text-white"
+              : "bg-neutral-900 text-neutral-200 hover:bg-neutral-800"
+          }`}
+        >
+          Conversation
         </button>
         <button
           onClick={() => {
@@ -113,7 +125,7 @@ export function Toolbar({ viewMode, onViewModeChange, workflowId, onWorkflowStar
 
       {/* Reset */}
       <button
-        onClick={() => { resetGraph(); setTask(""); }}
+        onClick={() => { resetGraph(); resetConvo(); setTask(""); }}
         className="text-xs px-2 py-1 rounded border border-neutral-700 bg-neutral-900 text-neutral-200 hover:bg-neutral-800 transition-colors"
       >
         Clear

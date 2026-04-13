@@ -69,4 +69,5 @@ def sample_orchestrator_state():
         "needs_verification": False,
         "completed_agents": [],
         "last_error": None,
+        "iteration_count": 0,
     }

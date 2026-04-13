@@ -85,8 +85,11 @@ export const ExecutionStepNode = memo(({ id, data }: NodeProps<Node<StepNodeData
         )}
       </div>
 
-      <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Bottom} />
+      {/* Omnidirectional handles for radial layout */}
+      <Handle type="target" position={Position.Top} id="tgt-top" className="opacity-0" />
+      <Handle type="target" position={Position.Left} id="tgt-left" className="opacity-0" />
+      <Handle type="source" position={Position.Bottom} id="src-bottom" className="opacity-0" />
+      <Handle type="source" position={Position.Right} id="src-right" className="opacity-0" />
     </div>
   );
 });

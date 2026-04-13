@@ -10,7 +10,7 @@ from __future__ import annotations
 import structlog
 from langgraph.graph import END, StateGraph
 
-from src.graph.edges import route_to_agent, should_verify
+from src.graph.edges import route_to_agent, should_continue, should_verify
 from src.graph.nodes import (
     code_node,
     data_node,
@@ -65,8 +65,15 @@ def build_graph() -> StateGraph:
             },
         )
 
-    # ── Verifier → supervisor (always loops back for re-assessment) ────────────
-    workflow.add_edge("verifier", "supervisor")
+    # ── Verifier → supervisor OR end (checks is_complete / error before looping) ─
+    workflow.add_conditional_edges(
+        "verifier",
+        should_continue,
+        {
+            "supervisor": "supervisor",
+            END:          END,
+        },
+    )
 
     log.info("graph.compiled")
     return workflow

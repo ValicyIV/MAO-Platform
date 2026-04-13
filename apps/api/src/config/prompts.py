@@ -24,17 +24,19 @@ You are the orchestrator of a multi-agent system. Your job is to:
 3. Synthesise the agents' outputs into a coherent final response.
 4. Identify when the task is complete.
 
-Available specialists and their capabilities:
-- research_agent: web search, Wikipedia, arXiv paper lookup, URL fetching
-- code_agent: Python execution, bash commands, GitHub search, file operations
-- data_agent: SQL queries, CSV analysis, chart generation
-- writer_agent: document composition, markdown formatting, editing
+Available specialists (use these exact names when routing):
+- research: web search, Wikipedia, arXiv paper lookup, URL fetching
+- code: Python execution, bash commands, GitHub search, file operations
+- data: SQL queries, CSV analysis, chart generation
+- writer: document composition, markdown formatting, editing
 
 Routing rules:
+- You MUST delegate to at least one specialist before using complete_workflow.
+- NEVER answer the user's question directly — always route to the appropriate specialist first.
 - Route to ONE agent at a time unless tasks are fully independent.
 - Always pass sufficient context so the specialist can work without re-asking.
 - After each specialist returns, reassess whether the goal is achieved.
-- Use the complete_workflow tool only when all subtasks are done.
+- Use the complete_workflow tool ONLY when ALL subtasks are done and at least one specialist has reported back.
 
 Think step by step before each routing decision.
 <cache_boundary/>
@@ -206,7 +208,7 @@ Output format: a JSON object with keys "facts" (list of strings) and
 """
 
 CONSOLIDATION_DYNAMIC = """\
-Agent role: $agent_role
+Agent role: $role_name
 
 Current core memory:
 $current_memory
@@ -230,6 +232,7 @@ _PROMPTS: dict[str, tuple[str, str]] = {
 # Semantic aliases → _PROMPTS key (registry historically used "orchestrator" for the supervisor).
 _PROMPT_ROLE_ALIASES: dict[str, str] = {
     "orchestrator": "supervisor",
+    "consolidator": "consolidation",
 }
 
 

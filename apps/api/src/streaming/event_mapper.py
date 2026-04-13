@@ -52,6 +52,8 @@ class StreamPartMapper:
         self._started_message_nodes: set[str] = set()
         # Track cumulative streamed lengths per node for TEXT_MESSAGE_END.totalLength
         self._node_text_len: dict[str, int] = {}
+        # Track emitted supervisor handoffs so repeated supervisor chunks do not duplicate UI topics.
+        self._emitted_handoffs: set[tuple[str, str, str]] = set()
 
     def map(self, stream_part: dict[str, Any]) -> list[dict[str, Any]]:
         """
@@ -68,7 +70,7 @@ class StreamPartMapper:
         if part_type == "on_chat_model_stream":
             chunk = data.get("chunk", {})
             content = self._extract_chunk_content(chunk)
-            agent_id = self._get_agent_id(data)
+            agent_id = self._get_agent_id(data, stream_part)
 
             # Ensure RUN_STARTED has been emitted for this agent
             events.extend(self._maybe_emit_run_started(agent_id, ts))
@@ -82,16 +84,16 @@ class StreamPartMapper:
                     if b.get("type") == "thinking":
                         delta = str(b.get("thinking", "") or "")
                         if delta:
-                            events.extend(self._maybe_emit_text_start(data, ts, is_thinking=True))
-                            events.append(self._thinking_delta_event(data, delta, ts))
+                            events.extend(self._maybe_emit_text_start(data, ts, is_thinking=True, stream_part=stream_part))
+                            events.append(self._thinking_delta_event(data, delta, ts, stream_part=stream_part))
                     elif b.get("type") == "text":
                         delta = str(b.get("text", "") or "")
                         if delta:
-                            events.extend(self._maybe_emit_text_start(data, ts, is_thinking=False))
-                            events.append(self._text_content_event(data, delta, ts))
+                            events.extend(self._maybe_emit_text_start(data, ts, is_thinking=False, stream_part=stream_part))
+                            events.append(self._text_content_event(data, delta, ts, stream_part=stream_part))
             elif isinstance(content, str) and content:
-                events.extend(self._maybe_emit_text_start(data, ts, is_thinking=False))
-                events.append(self._text_content_event(data, content, ts))
+                events.extend(self._maybe_emit_text_start(data, ts, is_thinking=False, stream_part=stream_part))
+                events.append(self._text_content_event(data, content, ts, stream_part=stream_part))
 
             # If we only emitted RUN_STARTED and no stream content events, drop it.
             if len(events) == 1 and events[0].get("type") == "RUN_STARTED":
@@ -112,7 +114,7 @@ class StreamPartMapper:
                 "timestamp": ts,
                 "toolCallId": tool_call_id,
                 "nodeId": node_id,
-                "agentId": self._get_agent_id(data),
+                "agentId": self._get_agent_id(data, stream_part),
                 "toolName": data.get("name", "unknown_tool"),
             })
 
@@ -157,7 +159,7 @@ class StreamPartMapper:
             step_id = f"step-{str(uuid.uuid4())[:8]}"
             if run_id:
                 self._run_to_node[run_id] = step_id
-            agent_id = self._get_agent_id(data)
+            agent_id = self._get_agent_id(data, stream_part)
 
             # Ensure RUN_STARTED has been emitted for this agent
             events.extend(self._maybe_emit_run_started(agent_id, ts))
@@ -176,7 +178,7 @@ class StreamPartMapper:
         elif part_type in ("on_chain_end", "on_agent_finish"):
             run_id = data.get("run_id", "")
             step_id = self._run_to_node.get(run_id, f"step-{str(uuid.uuid4())[:8]}")
-            agent_id = self._get_agent_id(data)
+            agent_id = self._get_agent_id(data, stream_part)
             events.append({
                 "type": "STEP_FINISHED",
                 "runId": self.workflow_id,
@@ -198,6 +200,10 @@ class StreamPartMapper:
                     "totalTokens": 0,
                     "durationMs": 0,
                 })
+
+        # ── Chain stream chunks (used to synthesize supervisor handoffs) ───────────────
+        elif part_type == "on_chain_stream":
+            events.extend(self._maybe_emit_supervisor_handoff(data, ts, stream_part=stream_part))
 
         # ── Custom writer events (pass-through) ───────────────────────────────
         elif part_type == "custom" or "customType" in data:
@@ -271,7 +277,7 @@ class StreamPartMapper:
 
         return events
 
-    def _thinking_delta_event(self, data: dict[str, Any], delta: str, ts: int) -> dict[str, Any]:
+    def _thinking_delta_event(self, data: dict[str, Any], delta: str, ts: int, *, stream_part: dict[str, Any] | None = None) -> dict[str, Any]:
         run_id = data.get("run_id", "")
         msg_id = self._message_ids.setdefault(run_id, f"msg-{str(uuid.uuid4())[:8]}")
         node_id = f"thinking-{msg_id}"
@@ -283,13 +289,13 @@ class StreamPartMapper:
             "timestamp": ts,
             "payload": {
                 "nodeId": node_id,
-                "agentId": self._get_agent_id(data),
+                "agentId": self._get_agent_id(data, stream_part),
                 "delta": delta,
                 "messageId": msg_id,
             },
         }
 
-    def _text_content_event(self, data: dict[str, Any], delta: str, ts: int) -> dict[str, Any]:
+    def _text_content_event(self, data: dict[str, Any], delta: str, ts: int, *, stream_part: dict[str, Any] | None = None) -> dict[str, Any]:
         run_id = data.get("run_id", "")
         msg_id = self._message_ids.setdefault(run_id, f"msg-{str(uuid.uuid4())[:8]}")
         node_id = f"text-{msg_id}"
@@ -333,7 +339,46 @@ class StreamPartMapper:
             "tools": tools,
         }]
 
-    def _maybe_emit_text_start(self, data: dict[str, Any], ts: int, *, is_thinking: bool) -> list[dict[str, Any]]:
+    def _maybe_emit_supervisor_handoff(
+        self,
+        data: dict[str, Any],
+        ts: int,
+        *,
+        stream_part: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Promote supervisor chain stream state into a UI-visible handoff event."""
+        if not stream_part:
+            return []
+
+        metadata = self._as_dict(stream_part.get("metadata", {}))
+        if str(metadata.get("langgraph_node", "")).strip().lower() != "supervisor":
+            return []
+
+        chunk = self._as_dict(data.get("chunk", {}))
+        target = str(chunk.get("next", "") or "").strip().lower()
+        task = str(chunk.get("active_task", "") or "").strip()
+        if target not in _KNOWN_AGENT_IDS or target in {"supervisor", "orchestrator"} or not task:
+            return []
+
+        handoff_key = (str(metadata.get("langgraph_step", "")), target, task)
+        if handoff_key in self._emitted_handoffs:
+            return []
+        self._emitted_handoffs.add(handoff_key)
+
+        return [{
+            "type": "CUSTOM",
+            "customType": "agent_handoff",
+            "runId": self.workflow_id,
+            "timestamp": ts,
+            "payload": {
+                "fromAgentId": "supervisor",
+                "toAgentId": target,
+                "task": task,
+                "reason": str(chunk.get("reason", "") or ""),
+            },
+        }]
+
+    def _maybe_emit_text_start(self, data: dict[str, Any], ts: int, *, is_thinking: bool, stream_part: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """Emit TEXT_MESSAGE_START the first time we see content for a message."""
         run_id = data.get("run_id", "")
         msg_id = self._message_ids.get(run_id)
@@ -344,7 +389,7 @@ class StreamPartMapper:
         if node_id in self._started_message_nodes:
             return []
         self._started_message_nodes.add(node_id)
-        agent_id = self._get_agent_id(data)
+        agent_id = self._get_agent_id(data, stream_part)
         return [{
             "type": "TEXT_MESSAGE_START",
             "runId": self.workflow_id,
@@ -356,9 +401,30 @@ class StreamPartMapper:
             "isThinking": is_thinking,
         }]
 
-    def _get_agent_id(self, data: dict[str, Any]) -> str:
+    def _get_agent_id(self, data: dict[str, Any], stream_part: dict[str, Any] | None = None) -> str:
         # Try to extract the agent name from LangGraph metadata with robust fallbacks.
+        #
+        # astream_events v2 puts `metadata` and `tags` at the TOP LEVEL of
+        # stream_part, NOT inside `data`. We must check both.
+
+        # ── 1. Top-level stream_part metadata (highest priority) ───────────
+        if stream_part:
+            top_meta = self._as_dict(stream_part.get("metadata", {}))
+            lg_node = top_meta.get("langgraph_node", "")
+            if lg_node:
+                lc = lg_node.strip().lower()
+                if lc in _KNOWN_AGENT_IDS:
+                    return "supervisor" if lc == "orchestrator" else lc
+
+            for tag in (stream_part.get("tags") or []):
+                t = str(tag).strip().lower()
+                if t in _KNOWN_AGENT_IDS:
+                    return "supervisor" if t == "orchestrator" else t
+
+        # ── 2. Inner data-level metadata (fallback for custom events) ──────
         metadata = self._as_dict(data.get("metadata", {}))
+        if stream_part:
+            metadata = {**metadata, **self._as_dict(stream_part.get("metadata", {}))}
 
         raw_tags = data.get("tags", [])
         if isinstance(raw_tags, str):
@@ -382,11 +448,29 @@ class StreamPartMapper:
             metadata.get("agent_id"),
             metadata.get("name"),
             metadata.get("node_name"),
+            metadata.get("checkpoint_ns"),
+            metadata.get("langgraph_checkpoint_ns"),
         ]
+        # Also check top-level stream_part fields
+        if stream_part:
+            candidates.extend([
+                stream_part.get("name"),
+                stream_part.get("run_name"),
+            ])
+
         for candidate in candidates:
             if not candidate:
                 continue
-            c = str(candidate).strip().lower().replace("-", "_").replace(" ", "_")
+            c = (
+                str(candidate)
+                .strip()
+                .lower()
+                .replace("-", "_")
+                .replace(" ", "_")
+                .replace(":", "_")
+                .replace("|", "_")
+                .replace("/", "_")
+            )
             for known in _KNOWN_AGENT_IDS:
                 if c == known or c.startswith(f"{known}_") or c.endswith(f"_{known}") or f"_{known}_" in c:
                     return "supervisor" if known == "orchestrator" else known

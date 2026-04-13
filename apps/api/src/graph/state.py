@@ -43,6 +43,7 @@ class OrchestratorState(TypedDict, total=False):
     next: str
     current_agent: str
     task: str
+    active_task: str
     workflow_id: str
     agent_outputs: Annotated[dict[str, Any], merge_outputs]
     mailbox: Annotated[dict[str, list[AgentMessage]], merge_mailboxes]
@@ -50,6 +51,7 @@ class OrchestratorState(TypedDict, total=False):
     verification_target: str | None
     is_complete: bool
     error: str | None
+    iteration_count: int  # supervisor cycle counter — hard stop at MAX_ITERATIONS
 
 
 class SubAgentState(TypedDict, total=False):

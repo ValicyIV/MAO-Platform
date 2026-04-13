@@ -3,8 +3,10 @@ import { ReactFlowProvider } from "@xyflow/react";
 import FlowCanvas from "@/flow/FlowCanvas";
 import { Toolbar } from "@/components/panels/Toolbar";
 import { DetailPanel } from "@/components/panels/DetailPanel";
+import { WorkflowSidePanel } from "@/components/panels/WorkflowSidePanel";
+import { ConversationTreePanel } from "@/components/panels/ConversationTreePanel";
 
-export type ViewMode = "workflow" | "memory";
+export type ViewMode = "workflow" | "memory" | "conversation";
 
 export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>("workflow");
@@ -27,15 +29,21 @@ export default function App() {
 
       {/* Main canvas + detail panel */}
       <div className="flex flex-1 overflow-hidden">
-        {/* key resets React Flow store when switching workflow ↔ memory (two separate RF trees). */}
-        <ReactFlowProvider key={viewMode}>
-          <div className="flex-1 relative">
-            <FlowCanvas viewMode={viewMode} />
-          </div>
-        </ReactFlowProvider>
+        {viewMode === "conversation" ? (
+          /* Hierarchical conversation tree — Agent → Topic → Messages → Tools/Thinking */
+          <ConversationTreePanel />
+        ) : (
+          /* React Flow graph canvas (workflow or memory) */
+          <ReactFlowProvider key={viewMode}>
+            <div className="flex-1 relative">
+              <FlowCanvas viewMode={viewMode} />
+            </div>
+          </ReactFlowProvider>
+        )}
 
-        {/* Detail panel — collapsible side panel */}
-        <DetailPanel />
+        {/* Right panel: workflow gets thread+details, memory gets detail panel only */}
+        {viewMode === "workflow" && <WorkflowSidePanel />}
+        {viewMode === "memory" && <DetailPanel />}
       </div>
     </div>
   );
