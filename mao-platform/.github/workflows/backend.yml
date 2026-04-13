@@ -1,0 +1,59 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - 'apps/api/**'
+      - '.github/workflows/backend.yml'
+  pull_request:
+    paths:
+      - 'apps/api/**'
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: mao_test
+          POSTGRES_USER: mao
+          POSTGRES_PASSWORD: mao
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: '0.4.30'
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: uv sync --dev
+
+      - name: Lint (ruff)
+        working-directory: apps/api
+        run: uv run ruff check src/
+
+      - name: Type check (mypy)
+        working-directory: apps/api
+        run: uv run mypy src/ --ignore-missing-imports
+
+      - name: Tests
+        working-directory: apps/api
+        run: uv run pytest src/tests/ -v --cov=src --cov-report=term-missing
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DATABASE_URL: postgresql+asyncpg://mao:mao@localhost:5432/mao_test
+          LANGFUSE_PUBLIC_KEY: ''
+          LANGFUSE_SECRET_KEY: ''
+          MEMORY_GRAPH_ENABLED: 'false'

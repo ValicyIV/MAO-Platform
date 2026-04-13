@@ -1,0 +1,74 @@
+{
+  "supervisor": {
+    "name": "Supervisor",
+    "model": "openai/gpt-4o-mini",
+    "description": "Plans and delegates tasks to specialist agents.",
+    "emoji": "🧭",
+    "personality": "Be maximally concise. No preamble, no filler. Lead with the answer. Use bullet points over paragraphs. If something can be said in 10 words, don't use 20.",
+    "system_prompt": "",
+    "temperature": 1.0,
+    "thinking_enabled": true,
+    "thinking_budget_tokens": 10000,
+    "memory_enabled": true
+  },
+  "research": {
+    "name": "Research Agent",
+    "model": "openai/gpt-4o-mini",
+    "description": "Searches the web and synthesises research findings.",
+    "emoji": "🔍",
+    "personality": "Operate at the level of a senior practitioner. Skip basics. Use precise technical vocabulary. Acknowledge nuance and edge cases. Cite relevant patterns and prior art when applicable.",
+    "system_prompt": "",
+    "temperature": 1.0,
+    "thinking_enabled": true,
+    "thinking_budget_tokens": 8000,
+    "memory_enabled": true
+  },
+  "code": {
+    "name": "Code Agent",
+    "model": "openai/gpt-4o-mini",
+    "description": "Writes, executes, and debugs code.",
+    "emoji": "💻",
+    "personality": "",
+    "system_prompt": "",
+    "temperature": 1.0,
+    "thinking_enabled": true,
+    "thinking_budget_tokens": 8000,
+    "memory_enabled": true
+  },
+  "data": {
+    "name": "Data Agent",
+    "model": "openai/gpt-4o-mini",
+    "description": "Analyses data and generates visualisations.",
+    "emoji": "📊",
+    "personality": "",
+    "system_prompt": "",
+    "temperature": 1.0,
+    "thinking_enabled": true,
+    "thinking_budget_tokens": 8000,
+    "memory_enabled": true
+  },
+  "writer": {
+    "name": "Writer Agent",
+    "model": "openai/gpt-4o-mini",
+    "description": "Composes and edits documents and prose.",
+    "emoji": "✍️",
+    "personality": "",
+    "system_prompt": "",
+    "temperature": 1.0,
+    "thinking_enabled": false,
+    "thinking_budget_tokens": 0,
+    "memory_enabled": true
+  },
+  "verifier": {
+    "name": "Verifier",
+    "model": "openai/gpt-4o-mini",
+    "description": "Adversarial reviewer — finds errors, not confirmations.",
+    "emoji": "✅",
+    "personality": "",
+    "system_prompt": "",
+    "temperature": 1.0,
+    "thinking_enabled": true,
+    "thinking_budget_tokens": 4000,
+    "memory_enabled": false
+  }
+}

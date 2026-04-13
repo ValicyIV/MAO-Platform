@@ -1,0 +1,73 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+.cache/
+.parcel-cache/
+*.tsbuildinfo
+
+# Build outputs
+dist/
+.next/
+build/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environment
+.env
+.env.*
+!.env.example
+.env.local
+.env.production
+
+# Data (mounted volumes — keep dirs, ignore content)
+data/agent-memory/**
+data/kuzu/**
+!data/agent-memory/.gitkeep
+!data/kuzu/.gitkeep
+*.db
+*.sqlite
+*.sqlite3
+
+# Turborepo
+.turbo/
+
+# Editor
+.vscode/settings.json
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python virtual envs
+.venv/
+venv/
+
+# uv
+.python-version
+
+# Coverage
+coverage/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.git.child-backup/

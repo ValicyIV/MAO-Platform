@@ -1,0 +1,9 @@
+# Keep host node_modules and junk out of the image context (especially web build).
+node_modules
+**/node_modules
+.git
+dist
+**/.turbo
+*.log
+.env
+.env.*

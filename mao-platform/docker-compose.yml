@@ -1,0 +1,135 @@
+services:
+  # ── PostgreSQL ── start first, everything depends on it ───────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: mao
+      POSTGRES_USER: mao
+      POSTGRES_PASSWORD: mao
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      # pg_isready only checks the socket. pg_isready + a dummy query confirms
+      # the DB is fully ready to accept connections — prevents the Prisma race.
+      test:
+        - "CMD-SHELL"
+        - "pg_isready -U mao && psql -U mao -c 'SELECT 1' > /dev/null 2>&1"
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Langfuse (observability) ───────────────────────────────────────────────
+  # Langfuse runs Prisma migrations on startup. If Postgres isn't 100% ready
+  # yet (even after pg_isready passes), Prisma throws P1001. restart:on-failure
+  # makes Docker retry automatically — second attempt always succeeds.
+  langfuse:
+    image: langfuse/langfuse:2
+    restart: on-failure
+    ports:
+      - "3001:3000"
+    environment:
+      DATABASE_URL: postgresql://mao:mao@postgres:5432/mao
+      NEXTAUTH_URL: http://localhost:3001
+      NEXTAUTH_SECRET: change-me-in-production-32chars-min
+      SALT: change-me-in-production-also
+      TELEMETRY_ENABLED: "false"
+      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── Backend API ────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    restart: on-failure
+    environment:
+      # At least one of ANTHROPIC_API_KEY or OPENROUTER_API_KEY must be set.
+      # See .env.example for all options including Ollama.
+      ANTHROPIC_API_KEY:  ${ANTHROPIC_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OLLAMA_BASE_URL:    ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      EXTRACTION_MODEL:   ${EXTRACTION_MODEL:-claude-haiku-4-5}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: http://langfuse:3001
+      DATABASE_URL: postgresql+asyncpg://mao:mao@postgres:5432/mao
+      REDIS_URL: redis://redis:6379/0
+      KUZU_DB_PATH: /app/data/kuzu/mao.db
+      MEMORY_GRAPH_ENABLED: "true"
+      # Browser may use localhost or 127.0.0.1; dev Vite also uses :5173.
+      CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+    volumes:
+      - ./data/agent-memory:/app/data/memory
+      - ./data/kuzu:/app/data/kuzu
+      - ./data/agents.json:/app/data/agents.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      langfuse:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Frontend (production build) ────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "3000:80"
+    restart: on-failure
+    # No VITE_* needed: the bundle calls /api and ws(s)://<same host>/ws (nginx proxies to api:8000).
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # ── Ollama (optional — local models, zero cost) ────────────────────────────
+  # Uncomment to run local models. Pull with:
+  #   docker compose exec ollama ollama pull llama3.2
+  #
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   # NVIDIA GPU support:
+  #   # deploy:
+  #   #   resources:
+  #   #     reservations:
+  #   #       devices:
+  #   #         - driver: nvidia
+  #   #           count: all
+  #   #           capabilities: [gpu]
+
+volumes:
+  postgres_data:
+  redis_data:
+  # ollama_data:
